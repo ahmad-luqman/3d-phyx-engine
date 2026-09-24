@@ -107,6 +107,13 @@ A later assembly mode could let users build a mechanism from compatible parts, c
 
 These are two prioritization options. A practical compromise is to establish a small jet-engine visual prototype first, then build the reusable mechanical systems.
 
+### Current build path
+
+1. **Magnetic Field Loom — implemented:** Experiment 08 provides draggable bar magnets, RK4-traced field lines, streaming flux particles, and polarity flips that reconnect the lines. `lib/magnetism.ts` is the field model the motor bench will reuse.
+2. **Pulley Cathedral:** suspended weights, moving cables, linked wheels.
+3. **Motor / generator:** spinning coils in the loom's field, with torque and current.
+4. **Jet engine cutaway:** rotating compressor stages, combustion glow, flowing particles.
+
 ## Technical foundation
 
 The current stack is React, TypeScript, Three.js through React Three Fiber, Rapier, Drei, and React Three Postprocessing.
