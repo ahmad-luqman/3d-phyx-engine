@@ -1,106 +1,35 @@
-const sidebarWidths = [74, 58, 82, 66, 71, 54];
-const articleWidths = [100, 97, 94, 98, 86];
-
+'use client';
+import { lazy, Suspense, useEffect, useState } from 'react';
+import { Atom, ArrowUpRight, RotateCcw, Pause, Play, Expand, Circle, Box, Zap, ChevronRight, MoveUpRight } from 'lucide-react';
+import { Slider } from '@/components/ui/slider';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { demos, defaults, type DemoId, type LabSettings, type Metrics } from '@/lib/lab';
+const Scene = lazy(() => import('@/components/lab/scene'));
 export default function Home() {
-  return (
-    <main className="fixed inset-0 overflow-hidden bg-[#fbfaf8] text-zinc-900">
-      <header
-        aria-hidden="true"
-        className="grid h-[76px] grid-cols-[1fr_auto_1fr] items-center border-b border-stone-200 bg-white/95 px-6 sm:px-14"
-      >
-        <div className="flex items-center gap-3">
-          <span className="h-9 w-9 rounded-full bg-stone-100" />
-          <span className="h-3.5 w-28 rounded-full bg-stone-100" />
-        </div>
-        <span className="hidden h-9 w-[min(30vw,420px)] rounded-xl bg-stone-100 sm:block" />
-        <div className="flex items-center justify-end gap-3">
-          <span className="hidden h-9 w-9 rounded-full bg-stone-100 sm:block" />
-          <span className="h-9 w-24 rounded-xl bg-stone-100" />
-        </div>
-      </header>
-
-      <div
-        aria-hidden="true"
-        className="grid h-[calc(100%-76px)] grid-cols-[180px_minmax(0,1fr)_260px] gap-10 px-6 pb-24 pt-10 opacity-55 max-lg:grid-cols-[150px_minmax(0,1fr)] max-sm:grid-cols-1 sm:px-14"
-      >
-        <aside className="hidden border-r border-stone-200 pr-7 sm:block">
-          <div className="mb-6 h-2.5 w-16 rounded-full bg-stone-200" />
-          <div className="space-y-4">
-            {sidebarWidths.map((width) => (
-              <div key={width} className="flex items-center gap-3">
-                <span className="h-4 w-4 rounded bg-stone-200" />
-                <span
-                  className="h-2.5 rounded-full bg-stone-200"
-                  style={{ width: `${width}%` }}
-                />
-              </div>
-            ))}
-          </div>
-          <div className="mb-6 mt-9 h-2.5 w-24 rounded-full bg-stone-200" />
-          <div className="space-y-4">
-            {sidebarWidths.slice(0, 3).map((width) => (
-              <span
-                key={width}
-                className="block h-2.5 rounded-full bg-stone-200"
-                style={{ width: `${width}%` }}
-              />
-            ))}
-          </div>
-        </aside>
-
-        <article className="mx-auto flex w-full max-w-3xl flex-col gap-6">
-          <div className="space-y-3">
-            <div className="h-2.5 w-28 rounded-full bg-stone-200" />
-            <div className="h-7 w-4/5 rounded-lg bg-stone-200" />
-            <div className="h-7 w-3/5 rounded-lg bg-stone-200" />
-          </div>
-          <div className="min-h-[240px] flex-1 rounded-2xl bg-stone-200" />
-          <div className="flex items-center gap-3">
-            <span className="h-9 w-9 rounded-full bg-stone-200" />
-            <span className="h-2.5 w-28 rounded-full bg-stone-200" />
-          </div>
-          <div className="space-y-2">
-            {articleWidths.map((width) => (
-              <span
-                key={width}
-                className="block h-2.5 rounded-full bg-stone-200"
-                style={{ width: `${width}%` }}
-              />
-            ))}
-          </div>
-        </article>
-
-        <aside className="space-y-5 max-lg:hidden">
-          {[0, 1].map((card) => (
-            <div
-              key={card}
-              className="space-y-4 rounded-2xl border border-stone-200 bg-white/70 p-6"
-            >
-              <span className="block h-10 w-10 rounded-full bg-stone-200" />
-              <span className="block h-3 w-3/5 rounded-full bg-stone-200" />
-              <span className="block h-2.5 w-full rounded-full bg-stone-200" />
-              <span className="block h-2.5 w-4/5 rounded-full bg-stone-200" />
-              <span className="block h-8 w-24 rounded-lg bg-stone-200" />
-            </div>
-          ))}
-        </aside>
-      </div>
-
-      <output
-        aria-live="polite"
-        aria-atomic="true"
-        className="absolute left-1/2 top-[clamp(96px,13vh,122px)] w-[min(620px,calc(100%-40px))] -translate-x-1/2 rounded-[18px] border border-stone-200 bg-white/95 px-5 py-5 shadow-[0_18px_50px_rgb(24_24_27/9%)] backdrop-blur-sm"
-      >
-        <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.09em] text-stone-500">
-          Building your site
-        </p>
-        <h1 className="text-xl font-semibold tracking-tight">
-          Your site is taking shape
-        </h1>
-        <p className="mt-1 text-sm text-stone-500">
-          Your first version will appear here automatically when it’s ready.
-        </p>
-      </output>
-    </main>
-  );
+ const [mounted, setMounted] = useState(false);
+ const [demo, setDemo] = useState<DemoId>('foundry');
+ const [settings, setSettings] = useState<LabSettings>(defaults('foundry'));
+ const [reset, setReset] = useState(0);
+ const [metrics, setMetrics] = useState<Metrics>({ fps: 0, bodies: 45, energy: 0 });
+ useEffect(() => setMounted(true), []);
+ const info = demos.find(d => d.id === demo)!;
+ const update = (key: keyof LabSettings, value: number | boolean) => setSettings(s => ({ ...s, [key]: value }));
+ return <main className="lab" style={{ '--demo-color': info.color } as React.CSSProperties}>
+  <header className="topbar"><a className="brand" href="/" aria-label="Gravity lab home"><Atom size={27} strokeWidth={1.3} /><span>GRAVITY<span className="brand-dot">.</span></span></a><div className="top-caption">AN EXPERIMENTAL PHYSICS LAB</div><div className="system-status"><span className="status-dot" /> SYSTEM ONLINE <span className="version">V.01</span></div></header>
+  <Tabs value={demo} onValueChange={v => { setDemo(v as DemoId); setSettings(defaults(v as DemoId)); setReset(n => n + 1); }} className="workspace" orientation="vertical">
+   <aside className="sidebar"><div className="section-heading"><span>EXPERIMENTS</span><span>06</span></div><TabsList className="demo-list">{demos.map((d, i) => <TabsTrigger disabled={i > 0} key={d.id} value={d.id} className="demo-option"><span className="demo-number">0{i + 1}</span><span className="demo-copy"><strong>{d.name}</strong><small>{d.subtitle}</small></span><ChevronRight size={15} /></TabsTrigger>)}</TabsList><div className="sidebar-bottom"><span className="little-orbit">◎</span><p>A playground for<br />the laws of nature.</p><span className="secondary-meta">REAL-TIME · THREE DIMENSIONS</span></div></aside>
+   <TabsContent value={demo} className="experiment">
+    <div className="scene-wrap">{mounted && <Suspense fallback={<div className="loading">Initializing physics…</div>}><Scene key={reset} settings={settings} onMetrics={setMetrics} /></Suspense>}</div>
+    <div className="scene-heading"><div className="eyebrow"><span />{info.level}</div><h1>{info.label}</h1><p>{info.description}</p></div>
+    <div className="scene-tools"><button className="icon-button" onClick={() => { const el = document.documentElement; if (document.fullscreenElement) void document.exitFullscreen(); else void el.requestFullscreen?.(); }} aria-label="Toggle fullscreen"><Expand size={18} /></button></div>
+    <div className="scene-label"><span className="crosshair">+</span> GRAVITATIONAL TEST CHAMBER <span>01</span></div>
+    <div className="canvas-help"><MoveUpRight size={14} /> Drag to orbit <span>·</span> Scroll to zoom</div>
+    <div className="transport"><button onClick={() => update('paused', !settings.paused)} className="icon-button" aria-label={settings.paused ? 'Resume simulation' : 'Pause simulation'}>{settings.paused ? <Play size={17} /> : <Pause size={17} />}</button><button onClick={() => setReset(n => n + 1)} className="icon-button" aria-label="Reset experiment"><RotateCcw size={17} /></button><div className="transport-divider" /><span>{settings.paused ? 'PAUSED' : 'SIMULATION RUNNING'}</span><i className={settings.paused ? '' : 'status-dot'} /></div>
+   </TabsContent>
+   <aside className="controls"><div className="section-heading"><span>CONTROL ROOM</span><span className="live-tag">LIVE</span></div><div className="control-section"><div className="control-title"><span>Environment</span><Atom size={15} /></div><Range label="Gravity" value={settings.gravity} min={0} max={20} step={.1} unit="m/s²" onChange={v => update('gravity', v)} /><Range label="Restitution" value={settings.bounce} min={0} max={1} step={.05} onChange={v => update('bounce', v)} /><Range label="Friction" value={settings.friction} min={0} max={1} step={.05} onChange={v => update('friction', v)} /></div><div className="control-section"><div className="control-title">Time scale <span className="control-value">{settings.speed.toFixed(2)}×</span></div><div className="speed-options">{[.25, .5, 1].map(s => <button key={s} className={settings.speed === s ? 'selected' : ''} onClick={() => update('speed', s)}>{s === 1 ? 'Real time' : `${s}×`}</button>)}</div></div><div className="control-section"><div className="control-title">Introduce matter <ArrowUpRight size={15} /></div><div className="spawn-buttons"><button disabled><Circle size={17} /> Sphere</button><button disabled><Box size={17} /> Cube</button></div><button className="primary-action" disabled><Zap size={17} />{info.action}<span>↗</span></button></div><div className="telemetry"><div className="section-heading">TELEMETRY <span>↗</span></div><div><span>Frame rate</span><strong>{metrics.fps || '—'} <small>FPS</small></strong></div><div><span>Active bodies</span><strong>{metrics.bodies}</strong></div><div><span>Physics solver</span><strong className="solver">RAPIER <span className="status-dot" /></strong></div><div className="signal-bars">{Array.from({ length: 32 }, (_, i) => <i key={i} style={{ height: `${10 + ((i * 17) % 24)}px` }} />)}</div></div></aside>
+  </Tabs><footer className="footer"><span><span className="status-dot" /> ALL SYSTEMS NOMINAL</span><span>RIGID BODIES. INFINITE POSSIBILITIES.</span><span>GRAVITY LAB <span className="muted">/</span> 2026</span></footer>
+ </main>;
+}
+function Range({ label, value, min, max, step, unit = '', onChange }: { label: string; value: number; min: number; max: number; step: number; unit?: string; onChange: (v: number) => void }) {
+ return <div className="range-control"><div><label>{label}</label><output>{value.toFixed(step < .1 ? 2 : 1)} <small>{unit}</small></output></div><Slider aria-label={label} value={[value]} min={min} max={max} step={step} onValueChange={v => onChange(Array.isArray(v) ? v[0] : v)} /></div>;
 }
