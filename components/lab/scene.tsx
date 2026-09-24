@@ -24,6 +24,7 @@ import { MagneticSwarm } from './swarm';
 
 import { Singularity } from './singularity';
 
+import { PendulumGhosts } from './ghosts';
 import { AdaptiveQuality } from './resilience';
 
 function Stage({ color }: { color: string }) {
@@ -103,7 +104,10 @@ export default function LabScene({
   return (
     <Canvas
       shadows={!low}
-      camera={{ position: [15, 12, 18], fov: 43 }}
+      camera={{
+        position: demo === 'ghosts' ? [2.5, 6, 20] : [15, 12, 18],
+        fov: 43,
+      }}
       dpr={[1, 1.5]}
       gl={{ antialias: true, powerPreference: 'high-performance' }}
     >
@@ -124,7 +128,13 @@ export default function LabScene({
       <Suspense fallback={null}>
         <Physics paused gravity={[0, -settings.gravity, 0]} timeStep={1 / 60}>
           <Stage color={color} />
-          {demo === 'singularity' ? (
+          {demo === 'ghosts' ? (
+            <PendulumGhosts
+              settings={settings}
+              command={command}
+              onMetrics={onMetrics}
+            />
+          ) : demo === 'singularity' ? (
             <Singularity {...props} onPhase={onPhase} />
           ) : demo === 'swarm' ? (
             <MagneticSwarm {...props} />
@@ -137,17 +147,22 @@ export default function LabScene({
           ) : (
             <Foundry {...props} />
           )}
-          <IntroducedMatter {...props} />
-          <Simulation
-            settings={settings}
-            command={command}
-            onMetrics={onMetrics}
-            drag={drag}
-            setDragging={setDragging}
-          />
+          {demo !== 'ghosts' && <IntroducedMatter {...props} />}
+          {demo !== 'ghosts' && (
+            <Simulation
+              settings={settings}
+              command={command}
+              onMetrics={onMetrics}
+              drag={drag}
+              setDragging={setDragging}
+            />
+          )}
         </Physics>
       </Suspense>
-      <CameraEntrance stopped={userMoved || reducedMotion} />
+      <CameraEntrance
+        stopped={userMoved || reducedMotion}
+        ghosts={demo === 'ghosts'}
+      />
       <AdaptiveQuality quality={settings.quality} onLow={setLow} />
       <OrbitControls
         onStart={() => setUserMoved(true)}
@@ -155,7 +170,7 @@ export default function LabScene({
         autoRotateSpeed={0.4}
         enabled={!dragging}
         makeDefault
-        target={[0, 2, 0]}
+        target={demo === 'ghosts' ? [0, 4.3, 0] : [0, 2, 0]}
         minDistance={8}
         maxDistance={38}
         maxPolarAngle={Math.PI / 2 - 0.05}
@@ -170,11 +185,17 @@ export default function LabScene({
   );
 }
 
-function CameraEntrance({ stopped }: { stopped: boolean }) {
+function CameraEntrance({
+  stopped,
+  ghosts,
+}: {
+  stopped: boolean;
+  ghosts: boolean;
+}) {
   const { camera } = useThree();
   const elapsed = useRef(0),
-    start = useRef(new Vector3(18, 14, 22)),
-    end = useRef(new Vector3(14, 10, 17));
+    start = useRef(ghosts ? new Vector3(5, 8, 25) : new Vector3(18, 14, 22)),
+    end = useRef(ghosts ? new Vector3(2.5, 6, 20) : new Vector3(14, 10, 17));
   useEffect(() => {
     if (!stopped && elapsed.current === 0) camera.position.copy(start.current);
   }, [stopped, camera]);

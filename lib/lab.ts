@@ -4,12 +4,20 @@ export type DemoId =
   | 'orbit'
   | 'destruction'
   | 'swarm'
-  | 'singularity';
+  | 'singularity'
+  | 'ghosts';
 export type Vec3 = [number, number, number];
 export type Quality = 'auto' | 'high' | 'low';
 export type Command = {
   id: number;
-  action: 'sphere' | 'cube' | 'pulse' | 'launch' | 'trigger';
+  action:
+    | 'sphere'
+    | 'cube'
+    | 'pulse'
+    | 'launch'
+    | 'trigger'
+    | 'advance'
+    | 'clear-trails';
 };
 export type LabSettings = {
   gravity: number;
@@ -22,8 +30,19 @@ export type LabSettings = {
   quality: Quality;
   cinematic: boolean;
   formation: 'orbit' | 'sphere' | 'vortex';
+  ghostCount: number;
+  ghostAngle: number;
+  ghostSeparation: number;
+  ghostTrail: number;
+  ghostArms: boolean;
+  ghostStart: number;
 };
-export type Metrics = { fps: number; bodies: number; energy: number };
+export type Metrics = {
+  fps: number;
+  bodies: number;
+  energy: number;
+  ghosts?: { elapsed: number; separation: number; energyDrift: number };
+};
 export const demos = [
   {
     id: 'foundry',
@@ -91,6 +110,17 @@ export const demos = [
     level: '06 / EXTREME',
     gravity: 0,
   },
+  {
+    id: 'ghosts',
+    name: 'Pendulum Ghosts',
+    subtitle: 'Chaos / initial conditions',
+    label: 'Almost the same.',
+    description: 'A fraction of a degree. An entirely different future.',
+    color: '#9db5ff',
+    action: 'Replay release',
+    level: '07 / CHAOTIC',
+    gravity: 9.81,
+  },
 ] as const;
 export function defaults(id: DemoId): LabSettings {
   return {
@@ -104,6 +134,12 @@ export function defaults(id: DemoId): LabSettings {
     quality: 'auto',
     cinematic: false,
     formation: 'orbit',
+    ghostCount: 50,
+    ghostAngle: 135,
+    ghostSeparation: 0.0001,
+    ghostTrail: 8,
+    ghostArms: true,
+    ghostStart: 20,
   };
 }
 export function seeded(index: number) {

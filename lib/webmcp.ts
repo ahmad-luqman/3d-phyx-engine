@@ -25,7 +25,7 @@ export function registerLabTools(actions: () => LabActions, context?: Context) {
     {
       name: 'configure_physics_lab',
       description:
-        'Select one of the six physics experiments and optionally pause or resume it. Selecting an experiment starts a fresh simulation.',
+        'Select a physics experiment and optionally pause or resume it. Selecting an experiment starts a fresh simulation.',
       inputSchema: {
         type: 'object',
         properties: {

@@ -64,6 +64,7 @@ export default function Home() {
     [hovered, setHovered] = useState(false);
   const [notice, setNotice] = useState('');
   const info = demos.find((d) => d.id === demo)!;
+  const ghostDemo = demo === 'ghosts';
   const fieldDemo = ['orbit', 'swarm', 'singularity'].includes(demo);
   const selectDemo = useCallback((id: DemoId) => {
     setDemo(id);
@@ -80,6 +81,7 @@ export default function Home() {
   const resetDemo = useCallback(() => {
     setSettings((s) => ({
       ...defaults(demo),
+      ghostStart: demo === 'ghosts' ? 0 : 20,
       quality: s.quality,
       cinematic: s.cinematic,
     }));
@@ -87,15 +89,31 @@ export default function Home() {
     setPhase('STABLE');
   }, [demo]);
   const update = <K extends keyof LabSettings>(key: K, value: LabSettings[K]) =>
-    setSettings((s) => ({ ...s, [key]: value }));
-  const fire = useCallback((action: Command['action']) => {
-    setSettings((s) => ({ ...s, paused: false }));
-    setCommand((c) => ({ id: c.id + 1, action }));
-  }, []);
+    setSettings((s) => ({
+      ...s,
+      [key]: value,
+      ...(ghostDemo &&
+      ['ghostCount', 'ghostAngle', 'ghostSeparation', 'gravity'].includes(key)
+        ? { ghostStart: 0 }
+        : {}),
+    }));
+  const fire = useCallback(
+    (action: Command['action']) => {
+      if (demo === 'ghosts' && (action === 'sphere' || action === 'cube'))
+        return;
+      setSettings((s) => ({
+        ...s,
+        paused: action === 'clear-trails' ? s.paused : false,
+        ...(demo === 'ghosts' && action === 'trigger' ? { ghostStart: 0 } : {}),
+      }));
+      setCommand((c) => ({ id: c.id + 1, action }));
+    },
+    [demo],
+  );
   const primaryAction = useCallback(() => {
     if (demo === 'singularity' && phase !== 'STABLE') return;
     fire(
-      demo === 'chain' || demo === 'singularity'
+      demo === 'chain' || demo === 'singularity' || demo === 'ghosts'
         ? 'trigger'
         : demo === 'destruction'
           ? 'launch'
@@ -121,7 +139,7 @@ export default function Home() {
       else if (event.key.toLowerCase() === 'b') fire('sphere');
       else if (event.key.toLowerCase() === 'c') fire('cube');
       else if (event.key.toLowerCase() === 'f') primaryAction();
-      else if (/^[1-6]$/.test(event.key))
+      else if (/^[1-7]$/.test(event.key))
         selectDemo(demos[Number(event.key) - 1].id);
     };
     window.addEventListener('keydown', keyboard);
@@ -179,7 +197,7 @@ export default function Home() {
         <aside className="sidebar">
           <div className="section-heading">
             <span>EXPERIMENTS</span>
-            <span>06</span>
+            <span>{String(demos.length).padStart(2, '0')}</span>
           </div>
           <TabsList
             className="demo-list"
@@ -276,6 +294,16 @@ export default function Home() {
               <Expand size={18} />
             </button>
           </div>
+          {ghostDemo && (
+            <div className="ghost-time">
+              <span className="ghost-spectrum" />
+              <span>
+                T +{' '}
+                {(metrics.ghosts?.elapsed ?? 20).toFixed(1).padStart(5, '0')} s
+              </span>
+              <span>{settings.ghostCount} TRAJECTORIES</span>
+            </div>
+          )}
           {demo === 'singularity' && (
             <div className="phase-indicator" aria-live="polite">
               <span className="status-dot" />
@@ -284,9 +312,11 @@ export default function Home() {
           )}
           <div className="scene-label">
             <span className="crosshair">+</span>
-            {fieldDemo
-              ? 'FIELD CONTAINMENT CHAMBER'
-              : 'GRAVITATIONAL TEST CHAMBER'}
+            {ghostDemo
+              ? 'SENSITIVE DEPENDENCE ON INITIAL CONDITIONS'
+              : fieldDemo
+                ? 'FIELD CONTAINMENT CHAMBER'
+                : 'GRAVITATIONAL TEST CHAMBER'}
             <span>
               {String(demos.findIndex((d) => d.id === demo) + 1).padStart(
                 2,
@@ -296,7 +326,7 @@ export default function Home() {
           </div>
           <div className="canvas-help">
             <MoveUpRight size={14} />
-            {demo === 'orbit' || demo === 'singularity'
+            {ghostDemo || demo === 'orbit' || demo === 'singularity'
               ? 'Drag to orbit · Scroll to zoom'
               : 'Drag objects to throw · Drag space to orbit'}
           </div>
@@ -342,7 +372,7 @@ export default function Home() {
           </div>
           <div className="control-section environment-controls">
             <div className="control-title">
-              <span>Environment</span>
+              <span>{ghostDemo ? 'Release conditions' : 'Environment'}</span>
               <Atom size={15} />
             </div>
             <Range
@@ -391,7 +421,38 @@ export default function Home() {
                 }
               />
             )}
-            {!fieldDemo && (
+            {ghostDemo && (
+              <>
+                <Range
+                  label="Release angle"
+                  value={settings.ghostAngle}
+                  min={30}
+                  max={170}
+                  step={1}
+                  unit="°"
+                  onChange={(v) => update('ghostAngle', v)}
+                />
+                <div className="ghost-precision">
+                  <Choice
+                    label="Difference per ghost"
+                    value={String(settings.ghostSeparation)}
+                    options={['0', '0.0001', '0.001', '0.01']}
+                    labels={['Identical', '0.0001°', '0.001°', '0.01°']}
+                    onChange={(v) => update('ghostSeparation', Number(v))}
+                  />
+                </div>
+                <Choice
+                  label="Pendulums"
+                  value={String(settings.ghostCount)}
+                  options={['10', '25', '50']}
+                  onChange={(v) => update('ghostCount', Number(v))}
+                />
+                <p className="ghost-note">
+                  Changing release conditions restarts the experiment.
+                </p>
+              </>
+            )}
+            {!fieldDemo && !ghostDemo && (
               <>
                 <Range
                   label="Restitution"
@@ -422,20 +483,51 @@ export default function Home() {
             />
           </div>
           <div className="control-section">
-            <div className="control-title">
-              Introduce matter
-              <ArrowUpRight size={15} />
-            </div>
-            <div className="spawn-buttons">
-              <button onClick={() => fire('sphere')} title="Spawn sphere (B)">
-                <Circle size={17} />
-                Sphere
-              </button>
-              <button onClick={() => fire('cube')} title="Spawn cube (C)">
-                <Box size={17} />
-                Cube
-              </button>
-            </div>
+            {ghostDemo ? (
+              <>
+                <Choice
+                  label="Trail memory"
+                  value={String(settings.ghostTrail)}
+                  options={['4', '8', '12']}
+                  labels={['4 s', '8 s', '12 s']}
+                  onChange={(v) => update('ghostTrail', Number(v))}
+                />
+                <label className="switch-label" htmlFor="ghost-arms">
+                  Ghost arms
+                  <Switch
+                    id="ghost-arms"
+                    checked={settings.ghostArms}
+                    onCheckedChange={(v) => update('ghostArms', v)}
+                  />
+                </label>
+                <div className="spawn-buttons ghost-actions">
+                  <button onClick={() => fire('advance')}>Jump +20 s</button>
+                  <button onClick={() => fire('clear-trails')}>
+                    Clear trails
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="control-title">
+                  Introduce matter
+                  <ArrowUpRight size={15} />
+                </div>
+                <div className="spawn-buttons">
+                  <button
+                    onClick={() => fire('sphere')}
+                    title="Spawn sphere (B)"
+                  >
+                    <Circle size={17} />
+                    Sphere
+                  </button>
+                  <button onClick={() => fire('cube')} title="Spawn cube (C)">
+                    <Box size={17} />
+                    Cube
+                  </button>
+                </div>
+              </>
+            )}
             <button
               className="primary-action"
               onClick={primaryAction}
@@ -449,6 +541,12 @@ export default function Home() {
               <span>↗</span>
             </button>
           </div>
+          {ghostDemo && (
+            <p className="ghost-note ghost-explainer">
+              Opens 20 s after release. Replay to see the paths start together.
+              White marks the reference pendulum.
+            </p>
+          )}
           <div className="telemetry">
             <div className="section-heading">
               TELEMETRY<span>↗</span>
@@ -461,20 +559,31 @@ export default function Home() {
               </strong>
             </div>
             <div>
-              <span>Rigid bodies</span>
-              <strong>{metrics.bodies || '—'}</strong>
+              <span>{ghostDemo ? 'Pendulums' : 'Rigid bodies'}</span>
+              <strong>
+                {ghostDemo ? settings.ghostCount : metrics.bodies || '—'}
+              </strong>
             </div>
             <div>
-              <span>Kinetic energy</span>
+              <span>{ghostDemo ? 'Reference kinetic' : 'Kinetic energy'}</span>
               <strong>
                 {metrics.energy.toLocaleString()}
                 <small> J</small>
               </strong>
             </div>
+            {ghostDemo && (
+              <div title="Root-mean-square tip distance from the reference, excluding visual depth offsets">
+                <span>RMS separation</span>
+                <strong>
+                  {(metrics.ghosts?.separation ?? 0).toFixed(3)}
+                  <small> m</small>
+                </strong>
+              </div>
+            )}
             <div>
               <span>Physics solver</span>
               <strong className="solver">
-                RAPIER
+                {ghostDemo ? 'RK4 · 240 Hz' : 'RAPIER'}
                 <span className="status-dot" />
               </strong>
             </div>
@@ -505,7 +614,7 @@ export default function Home() {
         </span>
         <span>
           SPACE pause<span className="muted">/</span>R reset
-          <span className="muted">/</span>1–6 switch
+          <span className="muted">/</span>1–7 switch
         </span>
         <span>
           GRAVITY LAB<span className="muted">/</span>2026

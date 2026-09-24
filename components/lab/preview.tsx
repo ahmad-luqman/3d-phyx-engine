@@ -2,6 +2,7 @@
 import { useRef } from 'react';
 import { Canvas, useFrame } from '@react-three/fiber';
 import type { Group } from 'three';
+import { Line } from '@react-three/drei';
 import { demos, type DemoId } from '@/lib/lab';
 function Miniature({ id }: { id: DemoId }) {
   const group = useRef<Group>(null);
@@ -11,7 +12,37 @@ function Miniature({ id }: { id: DemoId }) {
   });
   return (
     <group ref={group}>
-      {id === 'singularity' ? (
+      {id === 'ghosts' ? (
+        <>
+          {Array.from({ length: 7 }, (_, i) => {
+            const a = 0.35 + i * 0.19,
+              b = -0.9 + i * 0.21,
+              p1: [number, number, number] = [
+                Math.sin(a),
+                0.6 - Math.cos(a),
+                i * 0.025,
+              ],
+              p2: [number, number, number] = [
+                p1[0] + Math.sin(b),
+                p1[1] - Math.cos(b),
+                i * 0.025,
+              ];
+            return (
+              <group key={i}>
+                <Line
+                  points={[[0, 0.6, i * 0.025], p1, p2]}
+                  color={i % 2 ? '#86e8fa' : color}
+                  lineWidth={1}
+                />
+                <mesh position={p2}>
+                  <sphereGeometry args={[0.08, 8, 8]} />
+                  <meshBasicMaterial color={color} />
+                </mesh>
+              </group>
+            );
+          })}
+        </>
+      ) : id === 'singularity' ? (
         <>
           <mesh>
             <sphereGeometry args={[0.6, 16, 16]} />
