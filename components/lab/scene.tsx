@@ -4,7 +4,7 @@ import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { OrbitControls, Grid } from '@react-three/drei';
 import { Physics, RigidBody, CuboidCollider } from '@react-three/rapier';
 import { Bloom, EffectComposer, Vignette } from '@react-three/postprocessing';
-import { Vector3, type Group } from 'three';
+import { PCFShadowMap, Vector3, type Group } from 'three';
 import type { LabSettings, Metrics, Command, DemoId } from '@/lib/lab';
 
 import {
@@ -103,7 +103,7 @@ export default function LabScene({
   const props = { settings, command, color, drag, setDragging };
   return (
     <Canvas
-      shadows={!low}
+      shadows={low ? false : { type: PCFShadowMap }}
       camera={{
         position: demo === 'ghosts' ? [2.5, 6, 20] : [15, 12, 18],
         fov: 43,
