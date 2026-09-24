@@ -9,7 +9,7 @@
     "dev": "vinext dev",
     "build": "vinext build",
     "start": "wrangler dev --config dist/server/wrangler.json",
-    "lint": "oxlint",
+    "lint": "oxlint app components/lab lib tests vite.config.ts next.config.ts",
     "format": "oxfmt",
     "test": "node --import tsx --test tests/*.test.tsx tests/*.test.ts",
     "typecheck": "tsc --noEmit"
