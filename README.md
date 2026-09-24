@@ -1,6 +1,6 @@
 # GRAVITY — Experimental Physics Lab
 
-Six interactive 3D demos built with React 19, TypeScript, Three.js / React Three Fiber, Rapier, Drei, and React Three Postprocessing. Vinext and Vite provide the application shell and build.
+Seven interactive 3D demos built with React 19, TypeScript, Three.js / React Three Fiber, Rapier, Drei, and React Three Postprocessing. Vinext and Vite provide the application shell and build.
 
 ## Run
 
@@ -33,25 +33,38 @@ Lint targets application code, scene code, tests, and configuration. Generated U
 
 The orbital and magnetic fields are artistic force models. Destruction uses preassembled pieces and breakable joints, not arbitrary mesh fracturing. Visual effects are rendered locally; the app needs no API key or external assets.
 
+7. **Pendulum Ghosts** — 10–50 independent double pendulums with minute initial-angle differences, luminous trails, a white reference, and release replay.
+
+### Pendulum Ghosts
+
+Choose experiment **07** (keyboard **7**). The exhibit opens at **20 seconds of simulated time**, with real precomputed trail history, to make the divergence immediately visible. **Replay release** or **R** starts at zero. **Jump +20 s** advances the same physics; **Clear trails** clears history without changing motion or the pause state.
+
+Adjust gravity, the upper release angle, the lower-angle difference between consecutive ghosts, and the count. These changes restart from release. The lower arm starts 30° below the selected upper-arm angle. Choosing **Identical** sets every initial difference to zero. Trail memory and ghost-arm visibility can change without restarting.
+
+This exhibit uses a dedicated Float64, fixed 1/240-second RK4 solver for ideal planar double pendulums, with two 1 kg point masses and two massless 2.3 m rods. The pendulums do not collide or exchange forces. Small depth offsets make the overlaid experiments legible in 3D; they are excluded from the reported RMS tip separation. The equations follow [myPhysicsLab's double-pendulum derivation](https://www.myphysicslab.com/pendulum/double-pendulum-en.html). The other six exhibits continue to use Rapier.
+
+Trajectory storage is a bounded 720-segment ring per ghost, with age-based shader fading. Low graphics samples trails at 30 Hz instead of 60 Hz while preserving the same simulation step and pendulum count. Tests cover energy drift over 60 simulated seconds, fixed rod lengths, identical trajectories, divergence, rendering-cadence independence, replay, pause, and bounded trail buffers.
+
 ## Controls
 
 - Drag solid objects in Foundry, Chain Reaction, and Destruction, or individual swarm cubes, to pull and throw them.
 - Drag empty space to orbit; scroll or pinch to zoom. Orbiters and singularity fragments are controlled through the field controls.
-- **Space:** pause/resume. **R:** reset. **1–6:** select demo.
+- **Space:** pause/resume. **R:** reset. **1–7:** select demo.
 - **B:** spawn sphere. **C:** spawn cube. **F:** activate the selected experiment.
 - Shortcuts do not capture typing or focused interactive controls.
-- Slow motion keeps Rapier's fixed 1/60-second simulation step and scales elapsed time.
+- Slow motion scales elapsed time while keeping the fixed simulation step (1/60 second for Rapier; 1/240 second for Pendulum Ghosts).
 - Auto graphics lowers rendering resolution and disables shadows/postprocessing after sustained low frame rate; low graphics also lowers swarm and singularity body counts.
 - Cinematic camera rotation is optional and respects reduced-motion preferences.
 
-Spawned bodies are capped at 48 per experiment. Bodies that leave the simulation bounds are recycled. Reset restores experiment defaults while retaining graphics and camera preferences.
+Body spawning is available in the six Rapier experiments and is capped at 48 per experiment. Bodies that leave the simulation bounds are recycled. Reset restores experiment defaults while retaining graphics and camera preferences.
 
 ## Code map
 
 - `app/page.tsx` — lab controls, keyboard handling, and scene selection.
 - `components/lab/scene.tsx` — renderer, lighting, platform, camera, and scene composition.
 - `components/lab/physics.tsx` — shared rigid bodies, dragging, spawning, fixed stepping, and telemetry.
-- `components/lab/{chain,orbit,destruction,swarm,singularity}.tsx` — individual experiments.
+- `components/lab/{chain,orbit,destruction,swarm,singularity,ghosts}.tsx` — individual experiments.
+- `lib/pendulum.ts` and `lib/ghost-trails.ts` — deterministic double-pendulum solver and bounded trajectory storage.
 - `lib/fields.ts` — orbital and formation force calculations.
 - `tests/` — real Rapier scene mounting, stepping, reset, damage, propagation, eruption, and field tests.
 

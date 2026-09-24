@@ -161,7 +161,7 @@ The lab is rigid-body only. Each of these needs a new solver, so they are larger
 
 These are compact exhibits that show "tiny change → huge difference" and fit the lab's artistic style.
 
-- **Double pendulum ghosts:** 50 pendulums with starting angles 0.0001° apart that diverge into a spray of trails.
+- **Double pendulum ghosts — implemented:** Experiment 07 now provides 10–50 independent pendulums, adjustable initial-angle differences (including 0.0001°), luminous trails, and replay from release.
 - **Magnetic pendulum fractal:** A bob over 3 magnets. The floor is painted with a basin-of-attraction fractal that fills in live.
 - **Metronome synchronization:** Metronomes on a swinging platform fall into sync (Kuramoto).
 - **Galton board:** Balls form a bell curve, and tilting the board skews the distribution.
