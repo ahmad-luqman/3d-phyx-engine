@@ -22,7 +22,7 @@ export function PhysicalObject({ spec, settings, drag, setDragging, bodyRef, onI
   drag.current = { body: body.current, plane: new Plane().setFromNormalAndCoplanarPoint(normal, event.point), target: event.point.clone() };
   body.current.wakeUp(); setDragging(true); gl.domElement.style.cursor = 'grabbing';
  };
- return <RigidBody ref={b => { body.current = b; if (bodyRef) bodyRef.current = b; }} position={spec.position} rotation={spec.rotation} linearVelocity={spec.velocity} colliders={spec.shape === 'sphere' ? 'ball' : 'cuboid'} restitution={settings.bounce} friction={settings.friction} mass={spec.mass || 1} linearDamping={.08} angularDamping={.15} ccd onContactForce={onImpact ? e => onImpact(e.totalForceMagnitude) : undefined}>
+ return <RigidBody ref={b => { body.current = b; if (bodyRef) bodyRef.current = b; }} position={spec.position} rotation={spec.rotation} linearVelocity={spec.velocity ?? [0, 0, 0]} colliders={spec.shape === 'sphere' ? 'ball' : 'cuboid'} restitution={settings.bounce} friction={settings.friction} mass={spec.mass || 1} linearDamping={.08} angularDamping={.15} ccd onContactForce={onImpact ? e => onImpact(e.totalForceMagnitude) : undefined}>
   <group onPointerDown={down} onPointerUp={endDrag} onPointerOver={() => { gl.domElement.style.cursor = 'grab'; }} onPointerOut={() => { if (!drag.current) gl.domElement.style.cursor = 'auto'; }}>
    {spec.shape === 'sphere' ? <mesh castShadow receiveShadow><sphereGeometry args={[size[0] / 2, 20, 16]} /><meshStandardMaterial color={spec.color || '#b6f36a'} metalness={.55} roughness={.25} /></mesh> : <RoundedBox args={size} radius={.045} smoothness={1} castShadow receiveShadow><meshStandardMaterial color={spec.color || '#658179'} roughness={.28} metalness={.55} /></RoundedBox>}
   </group>

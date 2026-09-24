@@ -21,7 +21,7 @@ export function DestructionChamber(props: SharedSceneProps) {
    }
   }
   joints.current=links;
-  return()=>{for(const {joint} of links)if(joint.isValid())world.removeImpulseJoint(joint,true);joints.current=[];};
+  return()=>{for(const {joint} of links){const existing=world.getImpulseJoint(joint.handle);if(existing)world.removeImpulseJoint(existing,true);}joints.current=[];};
  },[world,rapier]);
  useBeforePhysicsStep(()=>{
   age.current++;
