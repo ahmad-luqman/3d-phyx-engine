@@ -9,7 +9,7 @@ import { seeded, type Command, type LabSettings, type Metrics, type Vec3 } from 
 export type BodySpec = { id: number; position: Vec3; size?: Vec3; shape?: 'cube' | 'sphere'; color?: string; velocity?: Vec3; mass?: number; rotation?: Vec3 };
 export type DragState = { body: RapierRigidBody; plane: Plane; target: Vector3 } | null;
 export type SharedSceneProps = { settings: LabSettings; command: Command; drag: MutableRefObject<DragState>; setDragging: (v: boolean) => void; color: string };
-export function PhysicalObject({ spec, settings, drag, setDragging, bodyRef }: { spec: BodySpec; settings: LabSettings; drag: MutableRefObject<DragState>; setDragging: (v: boolean) => void; bodyRef?: MutableRefObject<RapierRigidBody | null> }) {
+export function PhysicalObject({ spec, settings, drag, setDragging, bodyRef, onImpact }: { spec: BodySpec; settings: LabSettings; drag: MutableRefObject<DragState>; setDragging: (v: boolean) => void; onImpact?: (force: number) => void; bodyRef?: MutableRefObject<RapierRigidBody | null> }) {
  const body = useRef<RapierRigidBody>(null);
  const { camera, gl } = useThree();
  const size = spec.size || [.92, .92, .92];
@@ -22,7 +22,7 @@ export function PhysicalObject({ spec, settings, drag, setDragging, bodyRef }: {
   drag.current = { body: body.current, plane: new Plane().setFromNormalAndCoplanarPoint(normal, event.point), target: event.point.clone() };
   body.current.wakeUp(); setDragging(true); gl.domElement.style.cursor = 'grabbing';
  };
- return <RigidBody ref={b => { body.current = b; if (bodyRef) bodyRef.current = b; }} position={spec.position} rotation={spec.rotation} linearVelocity={spec.velocity} colliders={spec.shape === 'sphere' ? 'ball' : 'cuboid'} restitution={settings.bounce} friction={settings.friction} mass={spec.mass || 1} linearDamping={.08} angularDamping={.15} ccd>
+ return <RigidBody ref={b => { body.current = b; if (bodyRef) bodyRef.current = b; }} position={spec.position} rotation={spec.rotation} linearVelocity={spec.velocity} colliders={spec.shape === 'sphere' ? 'ball' : 'cuboid'} restitution={settings.bounce} friction={settings.friction} mass={spec.mass || 1} linearDamping={.08} angularDamping={.15} ccd onContactForce={onImpact ? e => onImpact(e.totalForceMagnitude) : undefined}>
   <group onPointerDown={down} onPointerUp={endDrag} onPointerOver={() => { gl.domElement.style.cursor = 'grab'; }} onPointerOut={() => { if (!drag.current) gl.domElement.style.cursor = 'auto'; }}>
    {spec.shape === 'sphere' ? <mesh castShadow receiveShadow><sphereGeometry args={[size[0] / 2, 20, 16]} /><meshStandardMaterial color={spec.color || '#b6f36a'} metalness={.55} roughness={.25} /></mesh> : <RoundedBox args={size} radius={.045} smoothness={1} castShadow receiveShadow><meshStandardMaterial color={spec.color || '#658179'} roughness={.28} metalness={.55} /></RoundedBox>}
   </group>
