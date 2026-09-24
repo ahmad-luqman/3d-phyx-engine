@@ -32,6 +32,7 @@ import { SceneBoundary } from '@/components/lab/resilience';
 import {
   demos,
   defaults,
+  usesRapier,
   type DemoId,
   type LabSettings,
   type Metrics,
@@ -65,6 +66,13 @@ export default function Home() {
   const [notice, setNotice] = useState('');
   const info = demos.find((d) => d.id === demo)!;
   const ghostDemo = demo === 'ghosts';
+  const loomDemo = demo === 'loom';
+  const magnetName = 'ABCD'[
+    Math.min(
+      metrics.loom?.selected ?? settings.magnetCount - 1,
+      settings.magnetCount - 1,
+    )
+  ];
   const fieldDemo = ['orbit', 'swarm', 'singularity'].includes(demo);
   const selectDemo = useCallback((id: DemoId) => {
     setDemo(id);
@@ -99,11 +107,12 @@ export default function Home() {
     }));
   const fire = useCallback(
     (action: Command['action']) => {
-      if (demo === 'ghosts' && (action === 'sphere' || action === 'cube'))
+      if (!usesRapier(demo) && (action === 'sphere' || action === 'cube'))
         return;
       setSettings((s) => ({
         ...s,
-        paused: action === 'clear-trails' ? s.paused : false,
+        paused:
+          action === 'clear-trails' || action === 'rotate' ? s.paused : false,
         ...(demo === 'ghosts' && action === 'trigger' ? { ghostStart: 0 } : {}),
       }));
       setCommand((c) => ({ id: c.id + 1, action }));
@@ -113,11 +122,13 @@ export default function Home() {
   const primaryAction = useCallback(() => {
     if (demo === 'singularity' && phase !== 'STABLE') return;
     fire(
-      demo === 'chain' || demo === 'singularity' || demo === 'ghosts'
-        ? 'trigger'
-        : demo === 'destruction'
-          ? 'launch'
-          : 'pulse',
+      demo === 'loom'
+        ? 'flip'
+        : demo === 'chain' || demo === 'singularity' || demo === 'ghosts'
+          ? 'trigger'
+          : demo === 'destruction'
+            ? 'launch'
+            : 'pulse',
     );
   }, [demo, phase, fire]);
   useEffect(() => {
@@ -139,7 +150,7 @@ export default function Home() {
       else if (event.key.toLowerCase() === 'b') fire('sphere');
       else if (event.key.toLowerCase() === 'c') fire('cube');
       else if (event.key.toLowerCase() === 'f') primaryAction();
-      else if (/^[1-7]$/.test(event.key))
+      else if (/^[1-8]$/.test(event.key))
         selectDemo(demos[Number(event.key) - 1].id);
     };
     window.addEventListener('keydown', keyboard);
@@ -304,6 +315,13 @@ export default function Home() {
               <span>{settings.ghostCount} TRAJECTORIES</span>
             </div>
           )}
+          {loomDemo && (
+            <div className="ghost-time loom-status">
+              <span className="ghost-spectrum loom-spectrum" />
+              <span>MAGNET {magnetName} SELECTED</span>
+              <span>{metrics.loom?.linked ?? 0} LINKED LINES</span>
+            </div>
+          )}
           {demo === 'singularity' && (
             <div className="phase-indicator" aria-live="polite">
               <span className="status-dot" />
@@ -314,9 +332,11 @@ export default function Home() {
             <span className="crosshair">+</span>
             {ghostDemo
               ? 'SENSITIVE DEPENDENCE ON INITIAL CONDITIONS'
-              : fieldDemo
-                ? 'FIELD CONTAINMENT CHAMBER'
-                : 'GRAVITATIONAL TEST CHAMBER'}
+              : loomDemo
+                ? 'MAGNETOSTATIC FIELD CHAMBER'
+                : fieldDemo
+                  ? 'FIELD CONTAINMENT CHAMBER'
+                  : 'GRAVITATIONAL TEST CHAMBER'}
             <span>
               {String(demos.findIndex((d) => d.id === demo) + 1).padStart(
                 2,
@@ -326,9 +346,11 @@ export default function Home() {
           </div>
           <div className="canvas-help">
             <MoveUpRight size={14} />
-            {ghostDemo || demo === 'orbit' || demo === 'singularity'
-              ? 'Drag to orbit · Scroll to zoom'
-              : 'Drag objects to throw · Drag space to orbit'}
+            {loomDemo
+              ? 'Drag magnets · Double-click to flip · Drag space to orbit'
+              : ghostDemo || demo === 'orbit' || demo === 'singularity'
+                ? 'Drag to orbit · Scroll to zoom'
+                : 'Drag objects to throw · Drag space to orbit'}
           </div>
           <div className="transport">
             <button
@@ -372,18 +394,50 @@ export default function Home() {
           </div>
           <div className="control-section environment-controls">
             <div className="control-title">
-              <span>{ghostDemo ? 'Release conditions' : 'Environment'}</span>
+              <span>
+                {ghostDemo
+                  ? 'Release conditions'
+                  : loomDemo
+                    ? 'Magnets'
+                    : 'Environment'}
+              </span>
               <Atom size={15} />
             </div>
-            <Range
-              label="Gravity"
-              value={settings.gravity}
-              min={0}
-              max={20}
-              step={0.1}
-              unit="m/s²"
-              onChange={(v) => update('gravity', v)}
-            />
+            {loomDemo && (
+              <>
+                <Choice
+                  label="Magnets"
+                  value={String(settings.magnetCount)}
+                  options={['2', '3', '4']}
+                  labels={['Pair', 'Triangle', 'Ring']}
+                  onChange={(v) => update('magnetCount', Number(v))}
+                />
+                <Range
+                  label="Flux flow"
+                  value={settings.strength}
+                  min={0.2}
+                  max={3}
+                  step={0.1}
+                  unit="×"
+                  onChange={(v) => update('strength', v)}
+                />
+                <p className="ghost-note">
+                  Changing the layout restores the magnets to their starting
+                  positions.
+                </p>
+              </>
+            )}
+            {!loomDemo && (
+              <Range
+                label="Gravity"
+                value={settings.gravity}
+                min={0}
+                max={20}
+                step={0.1}
+                unit="m/s²"
+                onChange={(v) => update('gravity', v)}
+              />
+            )}
             {(fieldDemo || demo === 'destruction' || demo === 'chain') && (
               <Range
                 label={
@@ -452,7 +506,7 @@ export default function Home() {
                 </p>
               </>
             )}
-            {!fieldDemo && !ghostDemo && (
+            {!fieldDemo && !ghostDemo && !loomDemo && (
               <>
                 <Range
                   label="Restitution"
@@ -483,7 +537,24 @@ export default function Home() {
             />
           </div>
           <div className="control-section">
-            {ghostDemo ? (
+            {loomDemo ? (
+              <>
+                <label className="switch-label" htmlFor="field-threads">
+                  Field lines
+                  <Switch
+                    id="field-threads"
+                    checked={settings.fieldThreads}
+                    onCheckedChange={(v) => update('fieldThreads', v)}
+                  />
+                </label>
+                <div className="spawn-buttons ghost-actions">
+                  <button onClick={() => fire('rotate')}>
+                    Rotate {magnetName} 45°
+                  </button>
+                  <button onClick={() => fire('flip-all')}>Flip all</button>
+                </div>
+              </>
+            ) : ghostDemo ? (
               <>
                 <Choice
                   label="Trail memory"
@@ -537,7 +608,9 @@ export default function Home() {
               <Zap size={17} />
               {demo === 'singularity' && phase !== 'STABLE'
                 ? phase.toLowerCase() + '…'
-                : info.action}
+                : loomDemo
+                  ? `${info.action} ${magnetName}`
+                  : info.action}
               <span>↗</span>
             </button>
           </div>
@@ -545,6 +618,12 @@ export default function Home() {
             <p className="ghost-note ghost-explainer">
               Opens 20 s after release. Replay to see the paths start together.
               White marks the reference pendulum.
+            </p>
+          )}
+          {loomDemo && (
+            <p className="ghost-note ghost-explainer">
+              Click a magnet to select it. Particles stream from each source
+              pole to a sink; linked lines end on a different magnet.
             </p>
           )}
           <div className="telemetry">
@@ -559,18 +638,40 @@ export default function Home() {
               </strong>
             </div>
             <div>
-              <span>{ghostDemo ? 'Pendulums' : 'Rigid bodies'}</span>
+              <span>
+                {ghostDemo
+                  ? 'Pendulums'
+                  : loomDemo
+                    ? 'Flux particles'
+                    : 'Rigid bodies'}
+              </span>
               <strong>
-                {ghostDemo ? settings.ghostCount : metrics.bodies || '—'}
+                {ghostDemo
+                  ? settings.ghostCount
+                  : loomDemo
+                    ? (metrics.loom?.particles ?? '—')
+                    : metrics.bodies || '—'}
               </strong>
             </div>
-            <div>
-              <span>{ghostDemo ? 'Reference kinetic' : 'Kinetic energy'}</span>
-              <strong>
-                {metrics.energy.toLocaleString()}
-                <small> J</small>
-              </strong>
-            </div>
+            {loomDemo ? (
+              <div title="Traced field lines, and how many end on a different magnet's sink pole">
+                <span>Field lines</span>
+                <strong>
+                  {metrics.loom?.lines ?? '—'}
+                  <small> · {metrics.loom?.linked ?? 0} linked</small>
+                </strong>
+              </div>
+            ) : (
+              <div>
+                <span>
+                  {ghostDemo ? 'Reference kinetic' : 'Kinetic energy'}
+                </span>
+                <strong>
+                  {metrics.energy.toLocaleString()}
+                  <small> J</small>
+                </strong>
+              </div>
+            )}
             {ghostDemo && (
               <div title="Root-mean-square tip distance from the reference, excluding visual depth offsets">
                 <span>RMS separation</span>
@@ -583,7 +684,11 @@ export default function Home() {
             <div>
               <span>Physics solver</span>
               <strong className="solver">
-                {ghostDemo ? 'RK4 · 240 Hz' : 'RAPIER'}
+                {ghostDemo
+                  ? 'RK4 · 240 Hz'
+                  : loomDemo
+                    ? 'RK4 TRACER'
+                    : 'RAPIER'}
                 <span className="status-dot" />
               </strong>
             </div>
@@ -614,7 +719,7 @@ export default function Home() {
         </span>
         <span>
           SPACE pause<span className="muted">/</span>R reset
-          <span className="muted">/</span>1–7 switch
+          <span className="muted">/</span>1–8 switch
         </span>
         <span>
           GRAVITY LAB<span className="muted">/</span>2026

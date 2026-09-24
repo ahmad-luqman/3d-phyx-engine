@@ -5,7 +5,14 @@ import { OrbitControls, Grid } from '@react-three/drei';
 import { Physics, RigidBody, CuboidCollider } from '@react-three/rapier';
 import { Bloom, EffectComposer, Vignette } from '@react-three/postprocessing';
 import { PCFShadowMap, Vector3, type Group } from 'three';
-import type { LabSettings, Metrics, Command, DemoId } from '@/lib/lab';
+import {
+  usesRapier,
+  type LabSettings,
+  type Metrics,
+  type Command,
+  type DemoId,
+  type Vec3,
+} from '@/lib/lab';
 
 import {
   Foundry,
@@ -25,6 +32,7 @@ import { MagneticSwarm } from './swarm';
 import { Singularity } from './singularity';
 
 import { PendulumGhosts } from './ghosts';
+import { FieldLoom } from './loom';
 import { AdaptiveQuality } from './resilience';
 
 function Stage({ color }: { color: string }) {
@@ -101,11 +109,13 @@ export default function LabScene({
       window.matchMedia('(prefers-reduced-motion: reduce)').matches,
   );
   const props = { settings, command, color, drag, setDragging };
+  const rapier = usesRapier(demo);
+  const view = cameraViews[demo] ?? cameraViews.default;
   return (
     <Canvas
       shadows={low ? false : { type: PCFShadowMap }}
       camera={{
-        position: demo === 'ghosts' ? [2.5, 6, 20] : [15, 12, 18],
+        position: view.end,
         fov: 43,
       }}
       dpr={[1, 1.5]}
@@ -128,7 +138,14 @@ export default function LabScene({
       <Suspense fallback={null}>
         <Physics paused gravity={[0, -settings.gravity, 0]} timeStep={1 / 60}>
           <Stage color={color} />
-          {demo === 'ghosts' ? (
+          {demo === 'loom' ? (
+            <FieldLoom
+              settings={settings}
+              command={command}
+              onMetrics={onMetrics}
+              setDragging={setDragging}
+            />
+          ) : demo === 'ghosts' ? (
             <PendulumGhosts
               settings={settings}
               command={command}
@@ -147,8 +164,8 @@ export default function LabScene({
           ) : (
             <Foundry {...props} />
           )}
-          {demo !== 'ghosts' && <IntroducedMatter {...props} />}
-          {demo !== 'ghosts' && (
+          {rapier && <IntroducedMatter {...props} />}
+          {rapier && (
             <Simulation
               settings={settings}
               command={command}
@@ -159,10 +176,7 @@ export default function LabScene({
           )}
         </Physics>
       </Suspense>
-      <CameraEntrance
-        stopped={userMoved || reducedMotion}
-        ghosts={demo === 'ghosts'}
-      />
+      <CameraEntrance stopped={userMoved || reducedMotion} view={view} />
       <AdaptiveQuality quality={settings.quality} onLow={setLow} />
       <OrbitControls
         onStart={() => setUserMoved(true)}
@@ -170,7 +184,7 @@ export default function LabScene({
         autoRotateSpeed={0.4}
         enabled={!dragging}
         makeDefault
-        target={demo === 'ghosts' ? [0, 4.3, 0] : [0, 2, 0]}
+        target={view.target}
         minDistance={8}
         maxDistance={38}
         maxPolarAngle={Math.PI / 2 - 0.05}
@@ -185,17 +199,25 @@ export default function LabScene({
   );
 }
 
+type CameraView = { start: Vec3; end: Vec3; target: Vec3 };
+const cameraViews: Partial<Record<DemoId, CameraView>> & {
+  default: CameraView;
+} = {
+  default: { start: [18, 14, 22], end: [14, 10, 17], target: [0, 2, 0] },
+  ghosts: { start: [5, 8, 25], end: [2.5, 6, 20], target: [0, 4.3, 0] },
+  loom: { start: [4, 16, 20], end: [2, 11.5, 14], target: [0, 1.2, 0] },
+};
 function CameraEntrance({
   stopped,
-  ghosts,
+  view,
 }: {
   stopped: boolean;
-  ghosts: boolean;
+  view: CameraView;
 }) {
   const { camera } = useThree();
   const elapsed = useRef(0),
-    start = useRef(ghosts ? new Vector3(5, 8, 25) : new Vector3(18, 14, 22)),
-    end = useRef(ghosts ? new Vector3(2.5, 6, 20) : new Vector3(14, 10, 17));
+    start = useRef(new Vector3(...view.start)),
+    end = useRef(new Vector3(...view.end));
   useEffect(() => {
     if (!stopped && elapsed.current === 0) camera.position.copy(start.current);
   }, [stopped, camera]);

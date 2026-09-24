@@ -12,7 +12,42 @@ function Miniature({ id }: { id: DemoId }) {
   });
   return (
     <group ref={group}>
-      {id === 'ghosts' ? (
+      {id === 'loom' ? (
+        <>
+          {[-1.1, 1.1].map((x) => (
+            <group key={x} position={[x, 0, 0]}>
+              <mesh position={[0.25, 0, 0]}>
+                <boxGeometry args={[0.5, 0.26, 0.26]} />
+                <meshStandardMaterial color="#ff4468" />
+              </mesh>
+              <mesh position={[-0.25, 0, 0]}>
+                <boxGeometry args={[0.5, 0.26, 0.26]} />
+                <meshStandardMaterial color="#3b82ff" />
+              </mesh>
+            </group>
+          ))}
+          {Array.from({ length: 6 }, (_, i) => {
+            const h = 0.25 + i * 0.22,
+              tilt = (i % 3) - 1;
+            const points = Array.from({ length: 13 }, (_, k) => {
+              const t = k / 12;
+              return [
+                -0.6 + t * 1.2,
+                Math.sin(t * Math.PI) * h * (i < 3 ? 1 : -1),
+                Math.sin(t * Math.PI) * tilt * 0.4,
+              ] as [number, number, number];
+            });
+            return (
+              <Line
+                key={i}
+                points={points}
+                color={i % 2 ? '#6fd6ff' : color}
+                lineWidth={1}
+              />
+            );
+          })}
+        </>
+      ) : id === 'ghosts' ? (
         <>
           {Array.from({ length: 7 }, (_, i) => {
             const a = 0.35 + i * 0.19,

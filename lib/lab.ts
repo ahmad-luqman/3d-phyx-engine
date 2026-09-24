@@ -5,7 +5,8 @@ export type DemoId =
   | 'destruction'
   | 'swarm'
   | 'singularity'
-  | 'ghosts';
+  | 'ghosts'
+  | 'loom';
 export type Vec3 = [number, number, number];
 export type Quality = 'auto' | 'high' | 'low';
 export type Command = {
@@ -17,7 +18,10 @@ export type Command = {
     | 'launch'
     | 'trigger'
     | 'advance'
-    | 'clear-trails';
+    | 'clear-trails'
+    | 'flip'
+    | 'flip-all'
+    | 'rotate';
 };
 export type LabSettings = {
   gravity: number;
@@ -36,12 +40,15 @@ export type LabSettings = {
   ghostTrail: number;
   ghostArms: boolean;
   ghostStart: number;
+  magnetCount: number;
+  fieldThreads: boolean;
 };
 export type Metrics = {
   fps: number;
   bodies: number;
   energy: number;
   ghosts?: { elapsed: number; separation: number; energyDrift: number };
+  loom?: { lines: number; linked: number; particles: number; selected: number };
 };
 export const demos = [
   {
@@ -121,7 +128,22 @@ export const demos = [
     level: '07 / CHAOTIC',
     gravity: 9.81,
   },
+  {
+    id: 'loom',
+    name: 'Magnetic Field Loom',
+    subtitle: 'Field lines / polarity',
+    label: 'Weave the invisible.',
+    description: 'Drag the magnets. Flip a pole. Watch the field reconnect.',
+    color: '#ff7ab8',
+    action: 'Flip polarity',
+    level: '08 / FIELD',
+    gravity: 0,
+  },
 ] as const;
+/** Exhibits that run on Rapier rigid bodies; the rest use dedicated solvers. */
+export function usesRapier(id: DemoId) {
+  return id !== 'ghosts' && id !== 'loom';
+}
 export function defaults(id: DemoId): LabSettings {
   return {
     coreX: 0,
@@ -140,6 +162,8 @@ export function defaults(id: DemoId): LabSettings {
     ghostTrail: 8,
     ghostArms: true,
     ghostStart: 20,
+    magnetCount: 2,
+    fieldThreads: true,
   };
 }
 export function seeded(index: number) {
