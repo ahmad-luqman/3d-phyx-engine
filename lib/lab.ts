@@ -2,7 +2,7 @@ export type DemoId = 'foundry' | 'chain' | 'orbit' | 'destruction' | 'swarm' | '
 export type Vec3 = [number, number, number];
 export type Quality = 'auto' | 'high' | 'low';
 export type Command = { id: number; action: 'sphere' | 'cube' | 'pulse' | 'launch' | 'trigger' };
-export type LabSettings = { gravity: number; strength: number; bounce: number; friction: number; speed: number; paused: boolean; quality: Quality; formation: 'orbit' | 'sphere' | 'vortex' };
+export type LabSettings = { gravity: number; coreX: number; strength: number; bounce: number; friction: number; speed: number; paused: boolean; quality: Quality; formation: 'orbit' | 'sphere' | 'vortex' };
 export type Metrics = { fps: number; bodies: number; energy: number };
 export const demos = [
   { id: 'foundry', name: 'Collision Foundry', subtitle: 'Rigid bodies / collisions', label: 'Matter in motion.', description: 'Stack it. Throw it. Break the balance.', color: '#b6f36a', action: 'Shockwave', level: '01 / CLASSICAL', gravity: 9.81 },
@@ -13,6 +13,6 @@ export const demos = [
   { id: 'singularity', name: 'Singularity', subtitle: 'Accretion / energy release', label: 'Beyond equilibrium.', description: 'Charge the core. Unleash the collapse.', color: '#74f4d4', action: 'Initiate eruption', level: '06 / EXTREME', gravity: 0 },
 ] as const;
 export function defaults(id: DemoId): LabSettings {
-  return { gravity: demos.find(d => d.id === id)!.gravity, strength: 1, bounce: 0.35, friction: 0.6, speed: 1, paused: false, quality: 'auto', formation: 'orbit' };
+  return { coreX: 0, gravity: demos.find(d => d.id === id)!.gravity, strength: 1, bounce: 0.35, friction: 0.6, speed: 1, paused: false, quality: 'auto', formation: 'orbit' };
 }
 export function seeded(index: number) { const x = Math.sin(index * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); }

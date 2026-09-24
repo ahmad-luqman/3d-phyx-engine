@@ -11,6 +11,8 @@ import { Foundry, IntroducedMatter, Simulation, type DragState } from './physics
 
 import { ChainReaction } from './chain';
 
+import { OrbitalReactor } from './orbit';
+
 function Stage({ color }: { color: string }) {
   const ring = useRef<Group>(null);
   useFrame((_, dt) => { if (ring.current) ring.current.rotation.y += dt * 0.025; });
@@ -29,7 +31,7 @@ export default function LabScene({ settings, onMetrics, command, demo = 'foundry
  return <Canvas shadows camera={{ position: [15, 12, 18], fov: 43 }} dpr={[1, 1.5]} gl={{ antialias: true, powerPreference: 'high-performance' }}>
   <color attach="background" args={['#080d10']} /><fog attach="fog" args={['#080d10', 28, 65]} />
   <ambientLight intensity={.55} /><directionalLight position={[7, 15, 8]} intensity={3} castShadow shadow-mapSize={[1024, 1024]} shadow-camera-left={-15} shadow-camera-right={15} shadow-camera-top={15} shadow-camera-bottom={-15} /><pointLight position={[-8, 5, -5]} color="#4ed7d3" intensity={90} />
-  <Suspense fallback={null}><Physics paused gravity={[0, -settings.gravity, 0]} timeStep={1 / 60}><Stage color={color} />{demo === 'chain' ? <ChainReaction {...props} /> : <Foundry {...props} />}<IntroducedMatter {...props} /><Simulation settings={settings} command={command} onMetrics={onMetrics} drag={drag} /></Physics></Suspense>
+  <Suspense fallback={null}><Physics paused gravity={[0, -settings.gravity, 0]} timeStep={1 / 60}><Stage color={color} />{demo === 'orbit' ? <OrbitalReactor {...props} /> : demo === 'chain' ? <ChainReaction {...props} /> : <Foundry {...props} />}<IntroducedMatter {...props} /><Simulation settings={settings} command={command} onMetrics={onMetrics} drag={drag} /></Physics></Suspense>
   <OrbitControls enabled={!dragging} makeDefault target={[0, 2, 0]} minDistance={8} maxDistance={38} maxPolarAngle={Math.PI / 2 - .05} />
   <EffectComposer><Bloom luminanceThreshold={1} intensity={.6} mipmapBlur /><Vignette darkness={.65} offset={.3} /></EffectComposer>
  </Canvas>;
