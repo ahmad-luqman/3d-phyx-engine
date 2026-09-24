@@ -8,6 +8,7 @@ import { Foundry, IntroducedMatter, PhysicalObject, Simulation, type SharedScene
 import { ChainReaction } from '../components/lab/chain';
 import { OrbitalReactor } from '../components/lab/orbit';
 import { DestructionChamber } from '../components/lab/destruction';
+import { Singularity } from '../components/lab/singularity';
 import { MagneticSwarm } from '../components/lab/swarm';
 import { defaults, type DemoId } from '../lib/lab';
 
@@ -27,7 +28,7 @@ async function mount(id:DemoId,Component:React.ComponentType<SharedSceneProps>){
  assert.ok(context,`${id}: physics initialized`);
  return {renderer,context,props,update:()=>renderer.update(element())};
 }
-const scenes=[['foundry',Foundry,65],['chain',ChainReaction,62],['orbit',OrbitalReactor,42],['destruction',DestructionChamber,80],['swarm',MagneticSwarm,240]] as const;
+const scenes=[['foundry',Foundry,65],['chain',ChainReaction,62],['orbit',OrbitalReactor,42],['destruction',DestructionChamber,80],['swarm',MagneticSwarm,240],['singularity',Singularity,180]] as const;
 for(const [id,Component,count]of scenes)test(`${id}: mounts real Rapier bodies, advances and cleans up`,async()=>{
  const {renderer,context}=await mount(id,Component);
  try{
@@ -51,4 +52,35 @@ test('spawn, shockwave, pause and reset operate on the simulated world',async()=
   const positions:Record<number,string>={};context.world.forEachRigidBody(b=>{positions[b.handle]=JSON.stringify(b.translation());});await renderer.advanceFrames(30,1/60);context.world.forEachRigidBody(b=>assert.equal(JSON.stringify(b.translation()),positions[b.handle]));
  }finally{await renderer.unmount();}
  const fresh=await mount('foundry',Foundry);assert.equal(fresh.context.world.bodies.len(),66);await fresh.renderer.unmount();
+});
+
+test('destruction stays bonded until a projectile impact breaks connections',async()=>{
+ const {renderer,context,props,update}=await mount('destruction',DestructionChamber);
+ try{
+  for(let i=0;i<60;i++)context.step(1/60);
+  const before=context.world.impulseJoints.len();assert.ok(before>100,'wall starts bonded');
+  props.command={id:1,action:'launch'};await update();
+  for(let i=0;i<150;i++)context.step(1/60);
+  assert.ok(context.world.impulseJoints.len()<before,'projectile breaks bonds');
+ }finally{await renderer.unmount();}
+});
+test('chain trigger swings the constrained pendulum',async()=>{
+ const {renderer,context,props,update}=await mount('chain',ChainReaction);
+ try{
+  assert.equal(context.world.impulseJoints.len(),1);
+  props.command={id:1,action:'trigger'};await update();
+  let fastest=0;context.world.forEachRigidBody(b=>fastest=Math.max(fastest,b.linvel().x));assert.ok(fastest>1);
+  for(let i=0;i<240;i++)context.step(1/60);
+  let fallen=0;context.world.forEachRigidBody(b=>{if(b.isDynamic()&&Math.abs(b.rotation().z)>.2)fallen++;});assert.ok(fallen>5,'reaction topples multiple dominoes');
+ }finally{await renderer.unmount();}
+});
+test('singularity completes charge, eruption and recovery',async()=>{
+ const phases:string[]=[];
+ function Observed(props:SharedSceneProps){return <Singularity {...props} onPhase={p=>phases.push(p)}/>;}
+ const {renderer,context,props,update}=await mount('singularity',Observed);
+ try{
+  props.command={id:1,action:'trigger'};await update();
+  for(let i=0;i<610;i++)context.step(1/60);
+  assert.deepEqual(phases,['STABLE','CHARGING','ERUPTION','RECOVERING','STABLE']);
+ }finally{await renderer.unmount();}
 });
