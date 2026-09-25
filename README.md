@@ -1,6 +1,6 @@
 # GRAVITY — Experimental Physics Lab
 
-Eight interactive 3D demos built with React 19, TypeScript, Three.js / React Three Fiber, Rapier, Drei, and React Three Postprocessing. Vinext and Vite provide the application shell and build.
+Nine interactive 3D demos built with React 19, TypeScript, Three.js / React Three Fiber, Rapier, Drei, and React Three Postprocessing. Vinext and Vite provide the application shell and build.
 
 ## Run
 
@@ -35,6 +35,7 @@ The orbital and magnetic fields are artistic force models. Destruction uses prea
 
 7. **Pendulum Ghosts** — 10–50 independent double pendulums with minute initial-angle differences, luminous trails, a white reference, and release replay.
 8. **Magnetic Field Loom** — draggable bar magnets whose field lines are traced live, with glowing flux particles and polarity flips that reconnect the pattern.
+9. **Pulley Cathedral** — a 2:1 block and tackle under a stone arch: drag the free end and the rope glows with tension as it lifts the load half as far.
 
 ### Pendulum Ghosts
 
@@ -52,14 +53,22 @@ Choose experiment **08** (keyboard **8**). Drag a magnet across the stage to mov
 
 Each bar magnet uses the Gilbert model: two opposite magnetic charges at its tips, with a 0.08 m softening length. Field lines are traced with fixed-length RK4 steps along B̂ from 24 seeds on the outward hemisphere of each source pole. A line ends when it enters a sink pole's 0.22 m capture sphere, drops below the stage, or leaves a 12 m bound. The **linked** count shows lines ending on a _different_ magnet. Flux particles (1,800; 700 in low graphics) advance along B̂ at a fixed 1/120-second step. Their speed grows with √|B|: this is artistic, since field lines carry no velocity. The field is magnetostatic, with no induction, forces, or torques between magnets. Tests cover the analytic two-pole field, superposition, dipole falloff, flip negation, N→S line closure, reconnection after a flip, cadence-independent particles, pause, and layout/quality changes.
 
+### Pulley Cathedral
+
+Choose experiment **09** (keyboard **9**). A rope runs from a ceiling anchor, under a movable pulley that carries the crate, over a fixed pulley, and down to a glowing handle. Drag the handle up and down its rail, or press **Pull 2 m** (**F**) or **Let out 2 m**. The pull scale beside the handle ticks every metre and the load scale every half metre, so matching ticks line up. The movable wheel turns at half the speed of the fixed one. Load mass (5–80 kg) and gravity change live. The rope's colour follows tension: dim blue when slack, cyan when holding the load at rest, amber when straining, and white-hot for catch spikes.
+
+The dedicated solver in `lib/pulley.ts` has one coordinate, the height of the movable pulley. The rope is inextensible but one-sided: `2h + y_hand ≥ C`. While taut, the load follows `h = (C − y_hand) / 2`. Each strand then carries `T = (m_load + 2 kg)(g + a) / 2`, measured from the rope's impulse at each fixed 1/240-second step. If the rope is let out faster than the load can fall, it goes slack, tension drops to zero, and the load falls freely until the rope catches it (`catchVelocity`). The crate can also rest on the floor. The hand is a stiff, critically damped follower of the pointer, capped at 5 m/s, so a flick produces a finite tension spike. The wheels have no rotational inertia or friction, and the load moves only vertically, with no swing.
+
+Tests cover exact 2 m → 1 m travel with constant rope length (both analytic and as drawn), rest and lifting tension, the 2:1 wheel speed ratio, slack and catch, resting on the floor, cadence independence, and the mounted scene's pull, pause, and load-mass handling.
+
 ## Controls
 
 - Drag solid objects in Foundry, Chain Reaction, and Destruction, or individual swarm cubes, to pull and throw them.
 - Drag empty space to orbit; scroll or pinch to zoom. Orbiters and singularity fragments are controlled through the field controls.
-- **Space:** pause/resume. **R:** reset. **1–8:** select demo.
+- **Space:** pause/resume. **R:** reset. **1–9:** select demo.
 - **B:** spawn sphere. **C:** spawn cube. **F:** activate the selected experiment.
 - Shortcuts do not capture typing or focused interactive controls.
-- Slow motion scales elapsed time while keeping the fixed simulation step (1/60 second for Rapier; 1/240 second for Pendulum Ghosts).
+- Slow motion scales elapsed time while keeping the fixed simulation step (1/60 second for Rapier; 1/240 second for Pendulum Ghosts and Pulley Cathedral).
 - Auto graphics lowers rendering resolution and disables shadows/postprocessing after sustained low frame rate; low graphics also lowers swarm and singularity body counts.
 - Cinematic camera rotation is optional and respects reduced-motion preferences.
 
@@ -70,9 +79,10 @@ Body spawning is available in the six Rapier experiments and is capped at 48 per
 - `app/page.tsx` — lab controls, keyboard handling, and scene selection.
 - `components/lab/scene.tsx` — renderer, lighting, platform, camera, and scene composition.
 - `components/lab/physics.tsx` — shared rigid bodies, dragging, spawning, fixed stepping, and telemetry.
-- `components/lab/{chain,orbit,destruction,swarm,singularity,ghosts,loom}.tsx` — individual experiments.
+- `components/lab/{chain,orbit,destruction,swarm,singularity,ghosts,loom,cathedral}.tsx` — individual experiments.
 - `lib/pendulum.ts` and `lib/ghost-trails.ts` — deterministic double-pendulum solver and bounded trajectory storage.
 - `lib/magnetism.ts` — Gilbert-model bar magnets, RK4 field-line tracer, and flux particles.
+- `lib/pulley.ts` — one-sided rope constraint solver and rope path for the 2:1 pulley.
 - `lib/fields.ts` — orbital and formation force calculations.
 - `tests/` — real Rapier scene mounting, stepping, reset, damage, propagation, eruption, and field tests.
 
