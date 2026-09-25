@@ -6,7 +6,8 @@ export type DemoId =
   | 'swarm'
   | 'singularity'
   | 'ghosts'
-  | 'loom';
+  | 'loom'
+  | 'cathedral';
 export type Vec3 = [number, number, number];
 export type Quality = 'auto' | 'high' | 'low';
 export type Command = {
@@ -21,7 +22,9 @@ export type Command = {
     | 'clear-trails'
     | 'flip'
     | 'flip-all'
-    | 'rotate';
+    | 'rotate'
+    | 'pull'
+    | 'lower';
 };
 export type LabSettings = {
   gravity: number;
@@ -42,6 +45,7 @@ export type LabSettings = {
   ghostStart: number;
   magnetCount: number;
   fieldThreads: boolean;
+  loadMass: number;
 };
 export type Metrics = {
   fps: number;
@@ -49,6 +53,13 @@ export type Metrics = {
   energy: number;
   ghosts?: { elapsed: number; separation: number; energyDrift: number };
   loom?: { lines: number; linked: number; particles: number; selected: number };
+  pulley?: {
+    tension: number;
+    peak: number;
+    pulled: number;
+    raised: number;
+    slack: boolean;
+  };
 };
 export const demos = [
   {
@@ -139,10 +150,21 @@ export const demos = [
     level: '08 / FIELD',
     gravity: 0,
   },
+  {
+    id: 'cathedral',
+    name: 'Pulley Cathedral',
+    subtitle: 'Mechanical advantage / tension',
+    label: 'Half the force.',
+    description: 'Pull two metres of rope. Lift the load one.',
+    color: '#ffb057',
+    action: 'Pull 2 m',
+    level: '09 / MECHANICAL',
+    gravity: 9.81,
+  },
 ] as const;
 /** Exhibits that run on Rapier rigid bodies; the rest use dedicated solvers. */
 export function usesRapier(id: DemoId) {
-  return id !== 'ghosts' && id !== 'loom';
+  return id !== 'ghosts' && id !== 'loom' && id !== 'cathedral';
 }
 export function defaults(id: DemoId): LabSettings {
   return {
@@ -164,6 +186,7 @@ export function defaults(id: DemoId): LabSettings {
     ghostStart: 20,
     magnetCount: 2,
     fieldThreads: true,
+    loadMass: 20,
   };
 }
 export function seeded(index: number) {

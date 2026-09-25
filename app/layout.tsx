@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: 'GRAVITY — Experimental Physics Lab',
   description:
-    'Eight interactive 3D experiments. Explore collisions, chain reactions, orbital fields, destruction, magnetic swarms, a singularity, chaotic pendulum ghosts, and a magnetic field loom.',
+    'Nine interactive 3D experiments. Explore collisions, chain reactions, orbital fields, destruction, magnetic swarms, a singularity, chaotic pendulum ghosts, a magnetic field loom, and a pulley cathedral.',
 };
 
 export default function RootLayout({

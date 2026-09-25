@@ -67,6 +67,8 @@ export default function Home() {
   const info = demos.find((d) => d.id === demo)!;
   const ghostDemo = demo === 'ghosts';
   const loomDemo = demo === 'loom';
+  const cathedralDemo = demo === 'cathedral';
+  const pulley = metrics.pulley;
   const magnetName = 'ABCD'[
     Math.min(
       metrics.loom?.selected ?? settings.magnetCount - 1,
@@ -122,13 +124,15 @@ export default function Home() {
   const primaryAction = useCallback(() => {
     if (demo === 'singularity' && phase !== 'STABLE') return;
     fire(
-      demo === 'loom'
-        ? 'flip'
-        : demo === 'chain' || demo === 'singularity' || demo === 'ghosts'
-          ? 'trigger'
-          : demo === 'destruction'
-            ? 'launch'
-            : 'pulse',
+      demo === 'cathedral'
+        ? 'pull'
+        : demo === 'loom'
+          ? 'flip'
+          : demo === 'chain' || demo === 'singularity' || demo === 'ghosts'
+            ? 'trigger'
+            : demo === 'destruction'
+              ? 'launch'
+              : 'pulse',
     );
   }, [demo, phase, fire]);
   useEffect(() => {
@@ -150,7 +154,7 @@ export default function Home() {
       else if (event.key.toLowerCase() === 'b') fire('sphere');
       else if (event.key.toLowerCase() === 'c') fire('cube');
       else if (event.key.toLowerCase() === 'f') primaryAction();
-      else if (/^[1-8]$/.test(event.key))
+      else if (/^[1-9]$/.test(event.key))
         selectDemo(demos[Number(event.key) - 1].id);
     };
     window.addEventListener('keydown', keyboard);
@@ -322,6 +326,16 @@ export default function Home() {
               <span>{metrics.loom?.linked ?? 0} LINKED LINES</span>
             </div>
           )}
+          {cathedralDemo && (
+            <div className="ghost-time pulley-status">
+              <span className="ghost-spectrum pulley-spectrum" />
+              <span>
+                PULLED {(pulley?.pulled ?? 0).toFixed(2)} m · RAISED{' '}
+                {(pulley?.raised ?? 0).toFixed(2)} m
+              </span>
+              <span>ROPE {pulley?.slack ? 'SLACK' : 'TAUT'}</span>
+            </div>
+          )}
           {demo === 'singularity' && (
             <div className="phase-indicator" aria-live="polite">
               <span className="status-dot" />
@@ -334,9 +348,11 @@ export default function Home() {
               ? 'SENSITIVE DEPENDENCE ON INITIAL CONDITIONS'
               : loomDemo
                 ? 'MAGNETOSTATIC FIELD CHAMBER'
-                : fieldDemo
-                  ? 'FIELD CONTAINMENT CHAMBER'
-                  : 'GRAVITATIONAL TEST CHAMBER'}
+                : cathedralDemo
+                  ? 'MECHANICAL ADVANTAGE NAVE'
+                  : fieldDemo
+                    ? 'FIELD CONTAINMENT CHAMBER'
+                    : 'GRAVITATIONAL TEST CHAMBER'}
             <span>
               {String(demos.findIndex((d) => d.id === demo) + 1).padStart(
                 2,
@@ -348,9 +364,11 @@ export default function Home() {
             <MoveUpRight size={14} />
             {loomDemo
               ? 'Drag magnets · Double-click to flip · Drag space to orbit'
-              : ghostDemo || demo === 'orbit' || demo === 'singularity'
-                ? 'Drag to orbit · Scroll to zoom'
-                : 'Drag objects to throw · Drag space to orbit'}
+              : cathedralDemo
+                ? 'Drag the glowing handle · Drag space to orbit'
+                : ghostDemo || demo === 'orbit' || demo === 'singularity'
+                  ? 'Drag to orbit · Scroll to zoom'
+                  : 'Drag objects to throw · Drag space to orbit'}
           </div>
           <div className="transport">
             <button
@@ -399,7 +417,9 @@ export default function Home() {
                   ? 'Release conditions'
                   : loomDemo
                     ? 'Magnets'
-                    : 'Environment'}
+                    : cathedralDemo
+                      ? 'Load'
+                      : 'Environment'}
               </span>
               <Atom size={15} />
             </div>
@@ -436,6 +456,17 @@ export default function Home() {
                 step={0.1}
                 unit="m/s²"
                 onChange={(v) => update('gravity', v)}
+              />
+            )}
+            {cathedralDemo && (
+              <Range
+                label="Load mass"
+                value={settings.loadMass}
+                min={5}
+                max={80}
+                step={1}
+                unit="kg"
+                onChange={(v) => update('loadMass', v)}
               />
             )}
             {(fieldDemo || demo === 'destruction' || demo === 'chain') && (
@@ -506,7 +537,7 @@ export default function Home() {
                 </p>
               </>
             )}
-            {!fieldDemo && !ghostDemo && !loomDemo && (
+            {!fieldDemo && !ghostDemo && !loomDemo && !cathedralDemo && (
               <>
                 <Range
                   label="Restitution"
@@ -554,6 +585,10 @@ export default function Home() {
                   <button onClick={() => fire('flip-all')}>Flip all</button>
                 </div>
               </>
+            ) : cathedralDemo ? (
+              <div className="spawn-buttons ghost-actions">
+                <button onClick={() => fire('lower')}>Let out 2 m</button>
+              </div>
             ) : ghostDemo ? (
               <>
                 <Choice
@@ -620,6 +655,13 @@ export default function Home() {
               White marks the reference pendulum.
             </p>
           )}
+          {cathedralDemo && (
+            <p className="ghost-note ghost-explainer">
+              Two strands hold the movable pulley, so each carries half the
+              load: pull twice as far, with half the force. Let rope out quickly
+              and it goes slack.
+            </p>
+          )}
           {loomDemo && (
             <p className="ghost-note ghost-explainer">
               Click a magnet to select it. Particles stream from each source
@@ -637,23 +679,60 @@ export default function Home() {
                 <small> FPS</small>
               </strong>
             </div>
-            <div>
-              <span>
-                {ghostDemo
-                  ? 'Pendulums'
-                  : loomDemo
-                    ? 'Flux particles'
-                    : 'Rigid bodies'}
-              </span>
-              <strong>
-                {ghostDemo
-                  ? settings.ghostCount
-                  : loomDemo
-                    ? (metrics.loom?.particles ?? '—')
-                    : metrics.bodies || '—'}
-              </strong>
-            </div>
-            {loomDemo ? (
+            {cathedralDemo && (
+              <>
+                <div title="Tension in each strand; the peak includes catch spikes">
+                  <span>Rope tension</span>
+                  <strong>
+                    {pulley ? pulley.tension.toFixed(0) : '—'}
+                    <small>
+                      {' '}
+                      N · peak {pulley ? pulley.peak.toFixed(0) : '—'}
+                    </small>
+                  </strong>
+                </div>
+                <div title="Rope drawn in at the free end, and the load's rise">
+                  <span>Pulled / raised</span>
+                  <strong>
+                    {(pulley?.pulled ?? 0).toFixed(2)}
+                    <small> m · {(pulley?.raised ?? 0).toFixed(2)} m</small>
+                  </strong>
+                </div>
+                <div>
+                  <span>Advantage</span>
+                  <strong>
+                    2 : 1
+                    <small>
+                      {' '}
+                      ·{' '}
+                      {((settings.loadMass + 2) * settings.gravity).toFixed(
+                        0,
+                      )}{' '}
+                      N load
+                    </small>
+                  </strong>
+                </div>
+              </>
+            )}
+            {!cathedralDemo && (
+              <div>
+                <span>
+                  {ghostDemo
+                    ? 'Pendulums'
+                    : loomDemo
+                      ? 'Flux particles'
+                      : 'Rigid bodies'}
+                </span>
+                <strong>
+                  {ghostDemo
+                    ? settings.ghostCount
+                    : loomDemo
+                      ? (metrics.loom?.particles ?? '—')
+                      : metrics.bodies || '—'}
+                </strong>
+              </div>
+            )}
+            {cathedralDemo ? null : loomDemo ? (
               <div title="Traced field lines, and how many end on a different magnet's sink pole">
                 <span>Field lines</span>
                 <strong>
@@ -688,7 +767,9 @@ export default function Home() {
                   ? 'RK4 · 240 Hz'
                   : loomDemo
                     ? 'RK4 TRACER'
-                    : 'RAPIER'}
+                    : cathedralDemo
+                      ? 'CONSTRAINT · 240 Hz'
+                      : 'RAPIER'}
                 <span className="status-dot" />
               </strong>
             </div>
@@ -719,7 +800,7 @@ export default function Home() {
         </span>
         <span>
           SPACE pause<span className="muted">/</span>R reset
-          <span className="muted">/</span>1–8 switch
+          <span className="muted">/</span>1–9 switch
         </span>
         <span>
           GRAVITY LAB<span className="muted">/</span>2026

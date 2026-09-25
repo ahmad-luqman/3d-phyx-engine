@@ -33,6 +33,7 @@ import { Singularity } from './singularity';
 
 import { PendulumGhosts } from './ghosts';
 import { FieldLoom } from './loom';
+import { PulleyCathedral } from './cathedral';
 import { AdaptiveQuality } from './resilience';
 
 function Stage({ color }: { color: string }) {
@@ -138,7 +139,14 @@ export default function LabScene({
       <Suspense fallback={null}>
         <Physics paused gravity={[0, -settings.gravity, 0]} timeStep={1 / 60}>
           <Stage color={color} />
-          {demo === 'loom' ? (
+          {demo === 'cathedral' ? (
+            <PulleyCathedral
+              settings={settings}
+              command={command}
+              onMetrics={onMetrics}
+              setDragging={setDragging}
+            />
+          ) : demo === 'loom' ? (
             <FieldLoom
               settings={settings}
               command={command}
@@ -206,6 +214,7 @@ const cameraViews: Partial<Record<DemoId, CameraView>> & {
   default: { start: [18, 14, 22], end: [14, 10, 17], target: [0, 2, 0] },
   ghosts: { start: [5, 8, 25], end: [2.5, 6, 20], target: [0, 4.3, 0] },
   loom: { start: [4, 16, 20], end: [2, 11.5, 14], target: [0, 1.2, 0] },
+  cathedral: { start: [7, 2, 22], end: [3.5, 4.5, 15], target: [0.4, 4.6, 0] },
 };
 function CameraEntrance({
   stopped,

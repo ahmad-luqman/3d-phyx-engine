@@ -12,7 +12,35 @@ function Miniature({ id }: { id: DemoId }) {
   });
   return (
     <group ref={group}>
-      {id === 'loom' ? (
+      {id === 'cathedral' ? (
+        <>
+          {[
+            [0.45, 0.9],
+            [0, -0.2],
+          ].map(([x, y]) => (
+            <mesh key={y} position={[x, y, 0]}>
+              <torusGeometry args={[0.22, 0.05, 8, 24]} />
+              <meshStandardMaterial color={color} metalness={0.6} />
+            </mesh>
+          ))}
+          <Line
+            points={[
+              [-0.22, 1.3, 0],
+              [-0.22, -0.2, 0],
+              [0.22, -0.2, 0],
+              [0.23, 0.9, 0],
+              [0.67, 0.9, 0],
+              [0.67, -0.6, 0],
+            ]}
+            color="#4fc3ff"
+            lineWidth={1}
+          />
+          <mesh position={[0, -0.85, 0]}>
+            <boxGeometry args={[0.55, 0.55, 0.55]} />
+            <meshStandardMaterial color="#6c867a" metalness={0.5} />
+          </mesh>
+        </>
+      ) : id === 'loom' ? (
         <>
           {[-1.1, 1.1].map((x) => (
             <group key={x} position={[x, 0, 0]}>
