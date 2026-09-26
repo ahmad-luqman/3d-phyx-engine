@@ -3,8 +3,10 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { useFrame, useThree, type ThreeEvent } from '@react-three/fiber';
 import {
+  BoxGeometry,
   CatmullRomCurve3,
   Color,
+  EdgesGeometry,
   Plane,
   TubeGeometry,
   Vector3,
@@ -23,45 +25,41 @@ import {
   LOAD_START,
   LinkedRigs,
   PULLEY_MASS,
-  WHEEL_RADIUS,
   ropePath,
   type PulleySystem,
 } from '@/lib/pulley';
 import type { Command, LabSettings, Metrics } from '@/lib/lab';
+import {
+  Arrow,
+  BRASS,
+  Cage,
+  Nave,
+  STEEL,
+  Scale,
+  Wheel,
+  plateCount,
+  restTint,
+  slackTint,
+  tensionColor,
+  type ArrowSetter,
+} from './cathedral-parts';
 
-const STONE = '#2a2c30',
-  BRASS = '#c8913f',
-  STEEL = '#8c96a0';
-const slackTint = new Color('#3a6f9a'),
-  restTint = new Color('#4fc3ff'),
-  strainTint = new Color('#ff9a3c'),
-  hotTint = new Color('#fff0d8');
-/** Room left and right of a rig for its scales and handle. */
-const RIG_MARGIN = 0.8,
-  RIG_GAP = 0.6,
-  PLATE_KG = 10,
-  PLATE_HEIGHT = 0.11;
+import { CounterweightLift } from './lift';
 
-/**
- * Rope glow by tension ratio. 1 is a 2:1 rig holding the load at rest under
- * 9.81 m/s², so every rig and layout shares one absolute scale.
- */
-export function tensionColor(ratio: number, out = new Color()) {
-  if (ratio <= 1) return out.copy(slackTint).lerp(restTint, Math.max(0, ratio));
-  if (ratio <= 2.5)
-    return out.copy(restTint).lerp(strainTint, (ratio - 1) / 1.5);
-  return out.copy(strainTint).lerp(hotTint, Math.min(1, (ratio - 2.5) / 4));
-}
+export { plateCount, tensionColor } from './cathedral-parts';
 
-export function plateCount(mass: number) {
-  return Math.min(8, Math.max(1, Math.round(mass / PLATE_KG)));
-}
+/** Room beyond a rig's lanyard reel (left) and pull scale (right). */
+const LEFT_PAD = 0.35,
+  RIGHT_PAD = 0.8,
+  RIG_GAP = 0.5;
+const lanyardIdle = new Color('#5d6670'),
+  lanyardHot = new Color('#ffb057');
 
 /** Rig x offsets, packed left to right and centred on the nave. */
 export function rigOffsets(rigs: PulleySystem[]) {
   const spans = rigs.map((r) => ({
-    left: r.geometry.xs[0] - RIG_MARGIN,
-    right: r.geometry.handX + RIG_MARGIN,
+    left: r.geometry.lanyardX - LEFT_PAD,
+    right: r.geometry.handX + RIGHT_PAD,
   }));
   const width =
     spans.reduce((w, s) => w + s.right - s.left, 0) +
@@ -74,7 +72,20 @@ export function rigOffsets(rigs: PulleySystem[]) {
   });
 }
 
-export function PulleyCathedral({
+export function PulleyCathedral(props: {
+  settings: LabSettings;
+  command: Command;
+  onMetrics: (metrics: Metrics) => void;
+  setDragging?: (v: boolean) => void;
+}) {
+  return props.settings.pulleyRig === 'lift' ? (
+    <CounterweightLift {...props} />
+  ) : (
+    <PulleyRigs {...props} />
+  );
+}
+
+function PulleyRigs({
   settings,
   command,
   onMetrics,
@@ -86,9 +97,17 @@ export function PulleyCathedral({
   setDragging?: (v: boolean) => void;
 }) {
   const { raycaster, pointer, camera, gl } = useThree();
-  // Mass and gravity are applied live every frame; only a rig change restarts.
-  const load = useRef({ mass: settings.loadMass, gravity: settings.gravity });
-  load.current = { mass: settings.loadMass, gravity: settings.gravity };
+  // Load and rating are applied live every frame; only a rig change restarts.
+  const load = useRef({
+    mass: settings.loadMass,
+    gravity: settings.gravity,
+    rating: settings.ropeRating,
+  });
+  load.current = {
+    mass: settings.loadMass,
+    gravity: settings.gravity,
+    rating: settings.ropeRating,
+  };
   const linked = useMemo(
     () =>
       new LinkedRigs(
@@ -103,15 +122,22 @@ export function PulleyCathedral({
   const drawers = useRef<((dt: number) => void)[]>([]),
     bar = useRef<Group>(null);
   const lastCommand = useRef(command.id),
-    sample = useRef({ frames: 0, time: 0, peaks: [] as number[] }),
-    stepPeaks = useRef<number[]>([]);
+    sample = useRef({
+      frames: 0,
+      time: 0,
+      peaks: [] as number[],
+      strains: [] as number[],
+    });
   const drag = useRef<{ offset: number } | null>(null);
   const plane = useMemo(() => new Plane(new Vector3(0, 0, 1), 0), []);
   const hit = useMemo(() => new Vector3(), []);
   const reference = ((settings.loadMass + PULLEY_MASS) * 9.81) / 2;
-  const half =
-    Math.max(...offsets.map((x, i) => x + linked.rigs[i].geometry.handX)) +
-    RIG_MARGIN;
+  const half = Math.max(
+    ...offsets.map((x, i) => {
+      const g = linked.rigs[i].geometry;
+      return Math.max(x + g.handX + RIGHT_PAD, -(x + g.lanyardX - LEFT_PAD));
+    }),
+  );
 
   useEffect(() => {
     if (command.id === lastCommand.current) return;
@@ -149,23 +175,19 @@ export function PulleyCathedral({
   };
 
   useFrame((_, dt) => {
-    linked.setLoad(settings.loadMass, settings.gravity);
+    linked.setLoad(settings.loadMass, settings.gravity, settings.ropeRating);
     if (drag.current) {
       raycaster.setFromCamera(pointer, camera);
       if (raycaster.ray.intersectPlane(plane, hit))
         linked.setTarget(hit.y - drag.current.offset);
     }
-    const peaks = stepPeaks.current;
+    const { peaks, strains } = sample.current;
     linked.rigs.forEach((rig, i) => {
-      peaks[i] = 0;
       if (!settings.paused)
         rig.advance(Math.min(dt, 0.1) * settings.speed, () => {
-          peaks[i] = Math.max(peaks[i], rig.tension);
+          peaks[i] = Math.max(peaks[i] ?? 0, rig.tension);
+          strains[i] = Math.max(strains[i] ?? 0, rig.strain);
         });
-      sample.current.peaks[i] = Math.max(
-        sample.current.peaks[i] ?? 0,
-        peaks[i],
-      );
       drawers.current[i]?.(dt);
     });
     bar.current?.position.setY(linked.hand);
@@ -181,13 +203,20 @@ export function PulleyCathedral({
           rigs: linked.rigs.map((r, i) => ({
             strands: r.strands,
             tension: r.tension,
-            peak: sample.current.peaks[i] ?? 0,
+            peak: peaks[i] ?? r.tension,
+            strain: strains[i] ?? r.strain,
             raised: r.raised,
             slack: r.slack,
+            snapped: r.snapped,
           })),
         },
       });
-      sample.current = { frames: 0, time: 0, peaks: [] };
+      sample.current = {
+        frames: 0,
+        time: 0,
+        peaks: [],
+        strains: [],
+      };
     }
   });
 
@@ -206,6 +235,7 @@ export function PulleyCathedral({
           x={offsets[i]}
           plates={plateCount(settings.loadMass)}
           reference={reference}
+          lens={settings.forceLens}
           grab={grab}
           register={(draw) => (drawers.current[i] = draw)}
         />
@@ -250,6 +280,7 @@ function Rig({
   x,
   plates,
   reference,
+  lens,
   grab,
   register,
 }: {
@@ -257,42 +288,101 @@ function Rig({
   x: number;
   plates: number;
   reference: number;
+  lens: boolean;
   grab: (event: ThreeEvent<PointerEvent>) => void;
   register: (draw: (dt: number) => void) => void;
 }) {
-  const { xs, sheaves, anchoredToBeam, handX } = rig.geometry;
+  const { xs, sheaves, anchoredToBeam, handX, lanyardX } = rig.geometry;
   const rope = useRef<Mesh>(null),
     ropeMaterial = useRef<MeshStandardMaterial>(null),
+    lanyard = useRef<Mesh>(null),
+    lanyardMaterial = useRef<MeshStandardMaterial>(null),
     load = useRef<Group>(null),
+    ghost = useRef<Group>(null),
     handle = useRef<Group>(null),
     handMarker = useRef<Mesh>(null),
     loadMarker = useRef<Mesh>(null),
     spins = useRef<(Group | null)[]>([]),
-    flash = useRef(0);
+    arrows = useRef<ArrowSetter[]>([]),
+    flash = useRef(0),
+    lanyardFlash = useRef(0),
+    tilt = useRef(0);
   const path = useMemo<number[]>(() => [], []);
   const tint = useMemo(() => new Color(), []);
+  const ghostEdges = useMemo(
+    () =>
+      new EdgesGeometry(new BoxGeometry(CRATE_SIZE, CRATE_SIZE, CRATE_SIZE)),
+    [],
+  );
   const movable = sheaves.map((s, j) => ({ ...s, j })).filter((s) => !s.top);
   const fixed = sheaves.map((s, j) => ({ ...s, j })).filter((s) => s.top);
   const ticks = Math.floor(HAND_START - rig.handMin) + 1;
+  const reelY = BEAM_Y - 0.25;
 
   const draw = (dt: number) => {
-    load.current?.position.setY(rig.height);
+    const h = rig.height;
+    // Hang along the lanyard once it holds the load; upright otherwise.
+    const target =
+      rig.snapped && !rig.grounded
+        ? Math.atan2(rig.x - lanyardX, BEAM_Y - h)
+        : 0;
+    tilt.current += (target - tilt.current) * (1 - Math.exp(-dt * 10));
+    load.current?.position.set(rig.x, h, 0);
+    if (load.current) load.current.rotation.z = tilt.current;
     sheaves.forEach((_, j) => {
       const spin = spins.current[j];
       if (spin) spin.rotation.z = rig.angles[j];
     });
     handle.current?.position.setY(rig.hand);
     handMarker.current?.position.setY(rig.hand);
-    loadMarker.current?.position.setY(rig.height - CRATE_DROP);
+    loadMarker.current?.position.setY(h - CRATE_DROP);
     // Hold a catch spike on the rope briefly so a one-step impulse is visible.
     flash.current = Math.max(rig.tension, flash.current * Math.exp(-dt * 5));
     const ratio = flash.current / reference;
     const material = ropeMaterial.current;
     if (material) {
-      material.emissive.copy(tensionColor(ratio, tint));
-      material.emissiveIntensity = rig.slack
-        ? 0.35
-        : 0.9 + Math.min(ratio, 6) * 0.45;
+      if (rig.snapped) material.emissive.copy(slackTint);
+      else material.emissive.copy(tensionColor(ratio, tint));
+      material.emissiveIntensity =
+        rig.slack || rig.snapped ? 0.35 : 0.9 + Math.min(ratio, 6) * 0.45;
+    }
+    // Lanyard: reel on the beam to the top of the block.
+    const line = lanyard.current;
+    if (line) {
+      const dx = rig.x - lanyardX,
+        dy = h + 0.1 - reelY,
+        length = Math.hypot(dx, dy);
+      line.position.set((lanyardX + rig.x) / 2, (reelY + h + 0.1) / 2, -0.05);
+      line.rotation.z = Math.atan2(-dx, dy);
+      line.scale.y = length;
+    }
+    lanyardFlash.current = Math.max(
+      rig.lanyardTension / reference,
+      lanyardFlash.current * Math.exp(-dt * 3),
+    );
+    const lm = lanyardMaterial.current;
+    if (lm) {
+      lm.emissive
+        .copy(lanyardIdle)
+        .lerp(lanyardHot, Math.min(1, lanyardFlash.current));
+      lm.emissiveIntensity = rig.snapped ? 1.2 : 0.25;
+    }
+    if (lens) {
+      const [weight, hand, ...strands] = arrows.current;
+      weight?.(rig.x, h - CRATE_DROP, false, rig.totalMass * rig.gravity);
+      hand?.(handX, rig.hand - 0.3, false, rig.snapped ? 0 : rig.tension);
+      strands.forEach((set, j) =>
+        set(xs[j], h + 0.25, true, rig.snapped ? 0 : rig.tension),
+      );
+      // Ghost: where the load settles once the hand reaches its target.
+      const settle = Math.max(
+        LOAD_FLOOR,
+        (rig.reach - rig.target) / rig.strands,
+      );
+      if (ghost.current) {
+        ghost.current.visible = !rig.snapped && Math.abs(settle - h) > 0.05;
+        ghost.current.position.setY(settle - CRATE_DROP);
+      }
     }
     const mesh = rope.current;
     if (!mesh) return;
@@ -312,6 +402,7 @@ function Rig({
 
   const blockLeft = Math.min(0, ...movable.map((s) => s.x)),
     blockRight = Math.max(0, ...movable.map((s) => s.x));
+  const bind = (i: number) => (set: ArrowSetter) => (arrows.current[i] = set);
   return (
     <group name={`pulley-rig-${rig.strands}`} position={[x, 0, 0]}>
       {fixed.map((s) => (
@@ -339,6 +430,22 @@ function Rig({
           />
         </mesh>
       )}
+      {/* Self-retracting safety lanyard: reel housing and its steel line. */}
+      <mesh position={[lanyardX, reelY + 0.08, -0.05]}>
+        <cylinderGeometry args={[0.2, 0.2, 0.18, 20]} />
+        <meshStandardMaterial color="#b3432f" metalness={0.5} roughness={0.4} />
+      </mesh>
+      <mesh name="pulley-lanyard" ref={lanyard}>
+        <cylinderGeometry args={[0.018, 0.018, 1, 6]} />
+        <meshStandardMaterial
+          ref={lanyardMaterial}
+          color="#3a3f44"
+          emissive={lanyardIdle}
+          emissiveIntensity={0.25}
+          metalness={0.8}
+          toneMapped={false}
+        />
+      </mesh>
       <group ref={load} position={[0, LOAD_START, 0]}>
         {movable.map((s) => (
           <group key={s.j} position={[s.x, 0, 0]}>
@@ -407,175 +514,20 @@ function Rig({
         <boxGeometry args={[1.6, 0.04, 1.6]} />
         <meshStandardMaterial color="#302820" roughness={0.8} />
       </mesh>
-    </group>
-  );
-}
-
-/** Open steel cage holding one plate per 10 kg of load. */
-function Cage({ plates }: { plates: number }) {
-  const s = CRATE_SIZE,
-    y = -CRATE_DROP;
-  return (
-    <group position={[0, y, 0]}>
-      {[-1, 1].map((py) => (
-        <mesh key={py} position={[0, (py * s) / 2, 0]} castShadow>
-          <boxGeometry args={[s, 0.05, s]} />
-          <meshStandardMaterial
-            color="#1c1f22"
-            metalness={0.7}
-            roughness={0.35}
-          />
-        </mesh>
-      ))}
-      {[
-        [-1, -1],
-        [-1, 1],
-        [1, -1],
-        [1, 1],
-      ].map(([px, pz]) => (
-        <mesh key={`${px}${pz}`} position={[(px * s) / 2, 0, (pz * s) / 2]}>
-          <boxGeometry args={[0.05, s, 0.05]} />
-          <meshStandardMaterial
-            color={STEEL}
-            metalness={0.85}
-            roughness={0.3}
-          />
-        </mesh>
-      ))}
-      {Array.from({ length: plates }, (_, k) => (
-        <mesh
-          key={k}
-          name="pulley-plate"
-          position={[0, -s / 2 + 0.03 + PLATE_HEIGHT * (k + 0.5), 0]}
-          castShadow
-        >
-          <cylinderGeometry args={[0.42, 0.42, PLATE_HEIGHT * 0.86, 28]} />
-          <meshStandardMaterial
-            color={k % 2 ? '#2b2f33' : '#3a3f44'}
-            metalness={0.75}
-            roughness={0.35}
-          />
-        </mesh>
-      ))}
-    </group>
-  );
-}
-
-/** Brass sheave with spokes; `spin` receives the rotating group. */
-function Wheel({ spin }: { spin: (group: Group | null) => void }) {
-  return (
-    <group>
-      <group ref={spin}>
-        <mesh castShadow>
-          <torusGeometry args={[WHEEL_RADIUS, 0.07, 12, 48]} />
-          <meshStandardMaterial
-            color={BRASS}
-            metalness={0.95}
-            roughness={0.22}
-          />
-        </mesh>
-        {[0, 1, 2].map((i) => (
-          <mesh key={i} rotation={[0, 0, (i * Math.PI) / 3]}>
-            <boxGeometry args={[WHEEL_RADIUS * 2, 0.05, 0.05]} />
-            <meshStandardMaterial
-              color={BRASS}
-              metalness={0.9}
-              roughness={0.3}
-            />
-          </mesh>
-        ))}
-      </group>
-      <mesh rotation={[Math.PI / 2, 0, 0]}>
-        <cylinderGeometry args={[0.08, 0.08, 0.34, 16]} />
-        <meshStandardMaterial color={STEEL} metalness={0.9} roughness={0.2} />
-      </mesh>
-    </group>
-  );
-}
-
-/**
- * Graduated rail. The pull scale ticks every metre and the load scale every
- * 1/n metre, so matching tick numbers line up under an n:1 advantage.
- */
-function Scale({
-  x,
-  from,
-  step,
-  count,
-  marker,
-}: {
-  x: number;
-  from: number;
-  step: number;
-  count: number;
-  marker: React.RefObject<Mesh | null>;
-}) {
-  const top = Math.max(from, from + step * (count - 1)),
-    bottom = Math.min(from, from + step * (count - 1));
-  return (
-    <group>
-      <mesh position={[x, (top + bottom) / 2, -0.1]}>
-        <boxGeometry args={[0.03, top - bottom + 0.2, 0.03]} />
-        <meshStandardMaterial color={STEEL} metalness={0.8} roughness={0.35} />
-      </mesh>
-      {Array.from({ length: count }, (_, k) => (
-        <mesh key={k} position={[x, from + step * k, -0.1]}>
-          <boxGeometry args={[k === 0 ? 0.34 : 0.2, 0.025, 0.03]} />
-          <meshBasicMaterial color={k === 0 ? '#ffffff' : '#9aa6b2'} />
-        </mesh>
-      ))}
-      <mesh ref={marker} position={[x, from, -0.1]}>
-        <boxGeometry args={[0.4, 0.05, 0.05]} />
-        <meshBasicMaterial color="#ffb057" toneMapped={false} />
-      </mesh>
-    </group>
-  );
-}
-
-/**
- * Stone piers, pointed ribs, and faint lancet windows around the machines.
- * `half` is the half-width the machines need; the nave widens to fit.
- */
-function Nave({ half }: { half: number }) {
-  // Two arcs of radius R centred ±a from the axis meet in a pointed apex.
-  const pier = Math.max(4.2, half + 0.8),
-    a = 0.8,
-    R = pier + a,
-    spring = 8,
-    apex = Math.acos(-a / R);
-  const windows = Math.max(2, Math.round(pier / 2.1));
-  return (
-    <group position={[0, 0, -2.4]}>
-      {[-pier, pier].map((x) => (
-        <mesh key={x} position={[x, spring / 2, 0]} castShadow receiveShadow>
-          <boxGeometry args={[0.8, spring, 0.8]} />
-          <meshStandardMaterial color={STONE} roughness={0.9} />
-        </mesh>
-      ))}
-      <mesh position={[a, spring, 0]} rotation={[0, 0, apex]}>
-        <torusGeometry args={[R, 0.18, 8, 48, Math.PI - apex]} />
-        <meshStandardMaterial color={STONE} roughness={0.9} />
-      </mesh>
-      <mesh position={[-a, spring, 0]}>
-        <torusGeometry args={[R, 0.18, 8, 48, Math.PI - apex]} />
-        <meshStandardMaterial color={STONE} roughness={0.9} />
-      </mesh>
-      {Array.from({ length: windows }, (_, i) => {
-        const x = -pier + ((i + 0.5) * 2 * pier) / windows;
-        return (
-          <mesh key={i} position={[x, 6.5, -0.6]}>
-            <planeGeometry args={[0.55, 5]} />
-            <meshBasicMaterial color="#ffb057" transparent opacity={0.12} />
-          </mesh>
-        );
-      })}
-      <spotLight
-        position={[0, 14, 4]}
-        angle={0.5 + half * 0.03}
-        penumbra={0.8}
-        intensity={140 + half * 12}
-        color="#ffd6a0"
-      />
+      {lens && (
+        <group name="force-lens">
+          <Arrow color="#ff7a59" bind={bind(0)} />
+          <Arrow color="#ffb057" bind={bind(1)} />
+          {Array.from({ length: rig.strands }, (_, j) => (
+            <Arrow key={j} color="#6fe3ff" bind={bind(j + 2)} />
+          ))}
+          <group ref={ghost} name="pulley-ghost" visible={false}>
+            <lineSegments geometry={ghostEdges}>
+              <lineBasicMaterial color="#ffe2b8" transparent opacity={0.45} />
+            </lineSegments>
+          </group>
+        </group>
+      )}
     </group>
   );
 }

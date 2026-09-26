@@ -9,9 +9,16 @@
  *   n·h + y_hand ≥ C   (h = movable block height, C fixed by the rope length)
  * Taut: the load follows h = (C − y_hand) / n, so pulling n metres raises it
  * one, and every strand carries T = M(g + a) / n. Slack: T = 0 and the load
- * falls freely. The hand is a stiff, speed-limited follower of its target so
- * a fast pointer flick produces a finite tension spike. Fixed 1/240 s steps
+ * falls freely. The hand follows its target at up to 5 m/s, speeding up and
+ * braking at 8 m/s², so a fast pointer flick produces a finite tension; only
+ * letting rope run is instant. Fixed 1/240 s steps
  * keep results independent of the rendering cadence.
+ *
+ * Ropes have a rating. A rigid rope delivers a catch in a single step, so the
+ * rating is compared with tension averaged over 50 ms, standing in for the
+ * stretch that spreads a real shock load. Past it the rope snaps: the load
+ * falls until a self-retracting safety lanyard from the beam locks, then
+ * swings from the lanyard's anchor beside the rig.
  */
 export const PULLEY_STEP = 1 / 240;
 export const WHEEL_RADIUS = 0.45;
@@ -30,12 +37,33 @@ export const LOAD_START = 2;
 /** Mass of each sheave on the movable block. */
 export const PULLEY_MASS = 2;
 export const MAX_STRANDS = 6;
-const HAND_STIFFNESS = 400;
-const HAND_DAMPING = 2 * Math.sqrt(HAND_STIFFNESS);
+/** Steps the rope rating averages tension over (50 ms). */
+export const SHOCK_STEPS = 12;
+/** Lanyard reel sits on the beam this far left of the first strand. */
+export const LANYARD_OFFSET = 1;
+/** Extra lanyard paid out before the inertia lock engages. */
+export const LANYARD_SLACK = 0.35;
+const SWING_DRAG = 0.08;
+const FLOOR_FRICTION = 6;
 const HAND_SPEED = 5;
+/**
+ * A person speeds up and slows down with limited acceleration (under g, so a
+ * stopping pull never throws the load) but can let go of the rope at once.
+ */
+const HAND_ACCEL = 8;
+/** Final approach rate, 1/s: the hand closes on its target exponentially. */
+const HAND_GAIN = 20;
 const SLACK_EPSILON = 1e-9;
+/** Fraction of the relative speed a catching rope returns as rebound. */
+export const CATCH_RESTITUTION = 0.2;
 
-export type PulleyOptions = { mass: number; gravity: number; strands?: number };
+export type PulleyOptions = {
+  mass: number;
+  gravity: number;
+  strands?: number;
+  /** Rope rating in newtons per strand; Infinity never snaps. */
+  rating?: number;
+};
 export type Sheave = { x: number; top: boolean };
 export type RigGeometry = {
   strands: number;
@@ -45,6 +73,7 @@ export type RigGeometry = {
   sheaves: Sheave[];
   anchoredToBeam: boolean;
   handX: number;
+  lanyardX: number;
 };
 
 /** Strand and sheave layout, centred so the load hangs at x = 0. */
@@ -63,6 +92,7 @@ export function rigGeometry(strands: number): RigGeometry {
     sheaves,
     anchoredToBeam: strands % 2 === 0,
     handX: xs[strands],
+    lanyardX: xs[0] - LANYARD_OFFSET,
   };
 }
 
@@ -73,9 +103,8 @@ export function rigGeometry(strands: number): RigGeometry {
  * and so the tension spike, is proportional to the difference.
  */
 export function catchVelocity(free: number, rope: number) {
-  // TODO(human): choose how the rope catches a falling load.
-  void free;
-  return rope;
+  // Rope stretch hands back a fifth of the impact as a small rebound.
+  return rope + CATCH_RESTITUTION * (rope - free);
 }
 
 export class PulleySystem {
@@ -83,9 +112,12 @@ export class PulleySystem {
   readonly geometry: RigGeometry;
   mass: number;
   gravity: number;
-  /** Movable block height and velocity. */
+  rating: number;
+  /** Movable block height, vertical velocity, and sideways offset once swinging. */
   height = LOAD_START;
   velocity = 0;
+  x = 0;
+  sideways = 0;
   /** Free-end height, velocity, and the height it is steering toward. */
   hand = HAND_START;
   handVelocity = 0;
@@ -94,6 +126,13 @@ export class PulleySystem {
   tension = 0;
   slack = false;
   grounded = false;
+  /** Tension averaged over the last SHOCK_STEPS steps. */
+  shock = 0;
+  snapped = false;
+  /** Locked lanyard length after a snap, and its tension in the last step. */
+  lanyard = 0;
+  lanyardTension = 0;
+  private readonly shocks = new Float64Array(SHOCK_STEPS);
   /** Rotation of each sheave, in wrap order. */
   readonly angles: Float64Array;
   time = 0;
@@ -119,10 +158,19 @@ export class PulleySystem {
     this.geometry = rigGeometry(strands);
     this.mass = options.mass;
     this.gravity = options.gravity;
+    this.rating = options.rating ?? Infinity;
+    if (!(this.rating > 0)) throw new Error('Invalid pulley configuration.');
     this.angles = new Float64Array(strands);
     this.reach = strands * LOAD_START + HAND_START;
     this.handMin = Math.max(HAND_MIN, this.reach - strands * LOAD_CEILING);
     this.tension = this.restTension;
+    this.shocks.fill(this.tension);
+    this.shock = this.tension;
+  }
+
+  /** Averaged tension as a fraction of the rope rating. */
+  get strain() {
+    return this.shock / this.rating;
   }
 
   /** Sheaves riding on the movable block. */
@@ -149,7 +197,7 @@ export class PulleySystem {
     return Math.max(0, this.strands * this.height + this.hand - this.reach);
   }
   get kinetic() {
-    return 0.5 * this.totalMass * this.velocity ** 2;
+    return 0.5 * this.totalMass * (this.velocity ** 2 + this.sideways ** 2);
   }
 
   setTarget(y: number) {
@@ -161,20 +209,36 @@ export class PulleySystem {
   }
 
   step() {
-    const dt = PULLEY_STEP,
-      n = this.strands;
-    // Hand: a critically damped spring toward the target with a speed cap.
-    let u =
-      this.handVelocity +
-      (HAND_STIFFNESS * (this.target - this.hand) -
-        HAND_DAMPING * this.handVelocity) *
-        dt;
-    u = Math.min(HAND_SPEED, Math.max(-HAND_SPEED, u));
+    const dt = PULLEY_STEP;
+    // Hand: a speed profile that can stop in the remaining distance.
+    const e = this.target - this.hand,
+      wanted =
+        Math.sign(e) *
+        Math.min(
+          HAND_SPEED,
+          Math.sqrt(2 * HAND_ACCEL * Math.abs(e)),
+          HAND_GAIN * Math.abs(e),
+        );
+    let du = wanted - this.handVelocity;
+    // Letting rope run upward is instant; everything else is limited.
+    if (!(e > 0 && du > 0))
+      du = Math.min(HAND_ACCEL * dt, Math.max(-HAND_ACCEL * dt, du));
+    let u = this.handVelocity + du;
     let y = this.hand + u * dt;
     if (y < this.handMin || y > HAND_MAX) {
       y = Math.min(HAND_MAX, Math.max(this.handMin, y));
       u = 0;
     }
+    if (this.snapped) this.swing(dt);
+    else this.lift(y, dt);
+    this.hand = y;
+    this.handVelocity = u;
+    this.steps++;
+    this.time = this.steps * PULLEY_STEP;
+  }
+
+  private lift(y: number, dt: number) {
+    const n = this.strands;
     // Load: fall freely, stop on the floor, then let the rope pull it back up.
     const wasSlack = this.slack;
     let v = this.velocity - this.gravity * dt;
@@ -202,10 +266,60 @@ export class PulleySystem {
     });
     this.height = h;
     this.velocity = v;
-    this.hand = y;
-    this.handVelocity = u;
-    this.steps++;
-    this.time = this.steps * PULLEY_STEP;
+    const slot = this.steps % SHOCK_STEPS;
+    this.shock += (this.tension - this.shocks[slot]) / SHOCK_STEPS;
+    this.shocks[slot] = this.tension;
+    if (this.shock > this.rating) this.snap();
+  }
+
+  /** Breaks the rope; the lanyard locks just beyond its current reach. */
+  snap() {
+    if (this.snapped) return;
+    this.snapped = true;
+    this.slack = true;
+    this.tension = 0;
+    this.shock = 0;
+    this.lanyard =
+      Math.hypot(this.x - this.geometry.lanyardX, this.height - BEAM_Y) +
+      LANYARD_SLACK;
+  }
+
+  /** Free fall held by the locked lanyard: a pendulum that can go slack. */
+  private swing(dt: number) {
+    const ax = this.geometry.lanyardX,
+      drag = 1 - SWING_DRAG * dt;
+    let vx = this.sideways * drag,
+      vy = (this.velocity - this.gravity * dt) * drag;
+    let x = this.x + vx * dt,
+      h = this.height + vy * dt;
+    this.lanyardTension = 0;
+    const dx = x - ax,
+      dy = h - BEAM_Y,
+      d = Math.hypot(dx, dy);
+    if (d > this.lanyard) {
+      const rx = dx / d,
+        ry = dy / d;
+      x = ax + rx * this.lanyard;
+      h = BEAM_Y + ry * this.lanyard;
+      // Remove the outward velocity; the lanyard's impulse gives its tension.
+      const outward = vx * rx + vy * ry;
+      if (outward > 0) {
+        vx -= outward * rx;
+        vy -= outward * ry;
+        this.lanyardTension = (this.totalMass * outward) / dt;
+      }
+    }
+    this.grounded = false;
+    if (h <= LOAD_FLOOR) {
+      h = LOAD_FLOOR;
+      vy = Math.max(0, vy);
+      vx *= 1 - FLOOR_FRICTION * dt;
+      this.grounded = true;
+    }
+    this.x = x;
+    this.height = h;
+    this.sideways = vx;
+    this.velocity = vy;
   }
 
   advance(seconds: number, onStep?: () => void) {
@@ -258,6 +372,15 @@ export function ropePath(system: PulleySystem, out: number[] = []) {
       out.push(cx + r * Math.cos(a), cy + r * Math.sin(a));
     }
   };
+  if (system.snapped) {
+    // The rope has run out through the sheaves; its broken end still hangs
+    // over the last fixed sheave, down to the free end.
+    const last = sheaves[sheaves.length - 1];
+    line(last.x - r, FIXED_Y - 1.1, last.x - r, FIXED_Y);
+    arc(last.x, FIXED_Y, Math.PI, 0);
+    line(handX, FIXED_Y, handX, y);
+    return out;
+  }
   // Strand j runs from the previous wrap (or the anchor) to wrap j.
   let from = anchoredToBeam ? BEAM_Y : h;
   sheaves.forEach((s, j) => {
@@ -304,10 +427,11 @@ export class LinkedRigs {
   get hand() {
     return this.rigs[0].hand;
   }
-  setLoad(mass: number, gravity: number) {
+  setLoad(mass: number, gravity: number, rating = Infinity) {
     for (const r of this.rigs) {
       r.mass = mass;
       r.gravity = gravity;
+      r.rating = rating;
     }
   }
   setTarget(y: number) {

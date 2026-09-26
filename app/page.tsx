@@ -38,6 +38,7 @@ import {
   type Metrics,
   type Command,
 } from '@/lib/lab';
+import { CAB_MASS, verdict } from '@/lib/lift';
 import {
   registerLabTools,
   browserModelContext,
@@ -68,8 +69,19 @@ export default function Home() {
   const ghostDemo = demo === 'ghosts';
   const loomDemo = demo === 'loom';
   const cathedralDemo = demo === 'cathedral';
+  const liftRig = cathedralDemo && settings.pulleyRig === 'lift';
+  const lift = metrics.lift;
+  const liftBraked = lift?.braked ?? true;
+  const bell = !lift?.rings
+    ? 'BELL SILENT'
+    : `BELL ×${lift.rings} · ${verdict(lift.arrival).toUpperCase()} ${lift.arrival.toFixed(1)} m/s`;
+  const balance = settings.counterweight - CAB_MASS - settings.loadMass;
   const pulley = metrics.pulley;
-  const anySlack = pulley?.rigs.some((r) => r.slack) ?? false;
+  const ropeState = pulley?.rigs.some((r) => r.snapped)
+    ? 'SNAPPED · R TO RESET'
+    : pulley?.rigs.some((r) => r.slack)
+      ? 'SLACK'
+      : 'TAUT';
   const magnetName = 'ABCD'[
     Math.min(
       metrics.loom?.selected ?? settings.magnetCount - 1,
@@ -297,8 +309,12 @@ export default function Home() {
               <span />
               {info.level}
             </div>
-            <h1>{info.label}</h1>
-            <p>{info.description}</p>
+            <h1>{liftRig ? 'Balance the weight.' : info.label}</h1>
+            <p>
+              {liftRig
+                ? 'Tune the counterweight. Release the brake. Ring the bell.'
+                : info.description}
+            </p>
           </div>
           <div className="scene-tools">
             <button
@@ -327,17 +343,30 @@ export default function Home() {
               <span>{metrics.loom?.linked ?? 0} LINKED LINES</span>
             </div>
           )}
-          {cathedralDemo && (
+          {liftRig && (
             <div className="ghost-time pulley-status">
               <span className="ghost-spectrum pulley-spectrum" />
               <span>
-                PULLED {(pulley?.pulled ?? 0).toFixed(2)} m · RAISED{' '}
+                CAB {metres(lift?.height ?? 0)} m · {metres(lift?.speed ?? 0)}{' '}
+                m/s
+              </span>
+              <span>
+                {liftBraked ? 'BRAKE SET · ' : ''}
+                {bell}
+              </span>
+            </div>
+          )}
+          {cathedralDemo && !liftRig && (
+            <div className="ghost-time pulley-status">
+              <span className="ghost-spectrum pulley-spectrum" />
+              <span>
+                PULLED {metres(pulley?.pulled ?? 0)} m · RAISED{' '}
                 {(pulley?.rigs ?? [{ raised: 0 }])
-                  .map((r) => r.raised.toFixed(2))
+                  .map((r) => metres(r.raised))
                   .join(' / ')}{' '}
                 m
               </span>
-              <span>ROPE {anySlack ? 'SLACK' : 'TAUT'}</span>
+              <span>ROPE {ropeState}</span>
             </div>
           )}
           {demo === 'singularity' && (
@@ -369,7 +398,9 @@ export default function Home() {
             {loomDemo
               ? 'Drag magnets · Double-click to flip · Drag space to orbit'
               : cathedralDemo
-                ? 'Drag the glowing handle · Drag space to orbit'
+                ? liftRig
+                  ? 'Release the brake to run the lift · Drag space to orbit'
+                  : 'Drag the glowing handle · Drag space to orbit'
                 : ghostDemo || demo === 'orbit' || demo === 'singularity'
                   ? 'Drag to orbit · Scroll to zoom'
                   : 'Drag objects to throw · Drag space to orbit'}
@@ -467,12 +498,38 @@ export default function Home() {
                 <Choice
                   label="Rig"
                   value={settings.pulleyRig}
-                  options={['1', '2', '4', 'compare']}
-                  labels={['1:1', '2:1', '4:1', 'All three']}
+                  options={['1', '2', '4', 'compare', 'lift']}
+                  labels={['1:1', '2:1', '4:1', 'All', 'Lift']}
                   onChange={(v) =>
                     update('pulleyRig', v as LabSettings['pulleyRig'])
                   }
                 />
+              </>
+            )}
+            {liftRig && (
+              <>
+                <Range
+                  label="Cargo"
+                  value={settings.loadMass}
+                  min={10}
+                  max={80}
+                  step={5}
+                  unit="kg"
+                  onChange={(v) => update('loadMass', v)}
+                />
+                <Range
+                  label="Counterweight"
+                  value={settings.counterweight}
+                  min={20}
+                  max={150}
+                  step={5}
+                  unit="kg"
+                  onChange={(v) => update('counterweight', v)}
+                />
+              </>
+            )}
+            {cathedralDemo && !liftRig && (
+              <>
                 <Range
                   label={`Load · ${Math.min(8, Math.max(1, Math.round(settings.loadMass / 10)))} plates`}
                   value={settings.loadMass}
@@ -481,6 +538,15 @@ export default function Home() {
                   step={5}
                   unit="kg"
                   onChange={(v) => update('loadMass', v)}
+                />
+                <Range
+                  label="Rope rating"
+                  value={settings.ropeRating}
+                  min={300}
+                  max={5000}
+                  step={100}
+                  unit="N"
+                  onChange={(v) => update('ropeRating', v)}
                 />
               </>
             )}
@@ -601,9 +667,21 @@ export default function Home() {
                 </div>
               </>
             ) : cathedralDemo ? (
-              <div className="spawn-buttons ghost-actions">
-                <button onClick={() => fire('lower')}>Let out 2 m</button>
-              </div>
+              <>
+                <label className="switch-label" htmlFor="force-lens">
+                  Force lens
+                  <Switch
+                    id="force-lens"
+                    checked={settings.forceLens}
+                    onCheckedChange={(v) => update('forceLens', v)}
+                  />
+                </label>
+                <div className="spawn-buttons ghost-actions">
+                  <button onClick={() => fire('lower')}>
+                    {liftRig ? 'Send down' : 'Let out 2 m'}
+                  </button>
+                </div>
+              </>
             ) : ghostDemo ? (
               <>
                 <Choice
@@ -660,7 +738,11 @@ export default function Home() {
                 ? phase.toLowerCase() + '…'
                 : loomDemo
                   ? `${info.action} ${magnetName}`
-                  : info.action}
+                  : liftRig
+                    ? liftBraked
+                      ? 'Release brake'
+                      : 'Set brake'
+                    : info.action}
               <span>↗</span>
             </button>
           </div>
@@ -670,11 +752,19 @@ export default function Home() {
               White marks the reference pendulum.
             </p>
           )}
-          {cathedralDemo && (
+          {liftRig && (
+            <p className="ghost-note ghost-explainer">
+              The cab weighs {CAB_MASS} kg plus cargo. Make the counterweight
+              heavier, release the brake, and ring the bell: arrive under 1.5
+              m/s for a clean chime.
+            </p>
+          )}
+          {cathedralDemo && !liftRig && (
             <p className="ghost-note ghost-explainer">
               With n strands holding the movable block, each carries 1/n of the
-              load: pull n times as far, with 1/n the force. All three hangs
-              every rig from one bar. Let rope out quickly and it goes slack.
+              load: pull n times as far, with 1/n the force. Let rope out
+              quickly and it goes slack; overload the rating and it snaps onto
+              the red safety reel.
             </p>
           )}
           {loomDemo && (
@@ -694,29 +784,59 @@ export default function Home() {
                 <small> FPS</small>
               </strong>
             </div>
-            {cathedralDemo && (
+            {liftRig && (
+              <>
+                <div title="Rope tension at the cab">
+                  <span>Rope tension</span>
+                  <strong>
+                    {(lift?.tension ?? 0).toFixed(0)}
+                    <small> N</small>
+                  </strong>
+                </div>
+                <div title="Counterweight minus cab and cargo">
+                  <span>Balance</span>
+                  <strong>
+                    {balance > 0 ? '+' : ''}
+                    {balance}
+                    <small> kg</small>
+                  </strong>
+                </div>
+                <div title="Speed at the latest bell strike">
+                  <span>Last arrival</span>
+                  <strong>
+                    {lift?.rings ? lift.arrival.toFixed(2) : '—'}
+                    <small> m/s · {lift?.rings ?? 0} rings</small>
+                  </strong>
+                </div>
+              </>
+            )}
+            {cathedralDemo && !liftRig && (
               <>
                 {(pulley?.rigs ?? []).map((r) => (
                   <div
                     key={r.strands}
-                    title={`Tension in each of the ${r.strands} supporting strands; the peak includes catch spikes`}
+                    title={`Tension in each of the ${r.strands} supporting strands, and the highest 50 ms average as a share of the rope rating`}
                   >
                     <span>{r.strands} : 1 tension</span>
                     <strong>
-                      {r.tension.toFixed(0)}
-                      <small> N · peak {r.peak.toFixed(0)}</small>
+                      {r.snapped ? 'SNAPPED' : r.tension.toFixed(0)}
+                      <small>
+                        {r.snapped
+                          ? ''
+                          : ` N · strain ${Math.round(r.strain * 100)}%`}
+                      </small>
                     </strong>
                   </div>
                 ))}
                 <div title="Rope drawn in at the free end, and each load's rise">
                   <span>Pulled / raised</span>
                   <strong>
-                    {(pulley?.pulled ?? 0).toFixed(2)}
+                    {metres(pulley?.pulled ?? 0)}
                     <small>
                       {' '}
                       m ·{' '}
                       {(pulley?.rigs ?? [])
-                        .map((r) => r.raised.toFixed(2))
+                        .map((r) => metres(r.raised))
                         .join(' / ')}{' '}
                       m
                     </small>
@@ -887,6 +1007,11 @@ function Choice({
       </RadioGroup>
     </div>
   );
+}
+
+/** Two-decimal metres without a stray "-0.00" from float noise. */
+function metres(value: number) {
+  return (Math.abs(value) < 0.005 ? 0 : value).toFixed(2);
 }
 
 function subscribeClient() {

@@ -10,14 +10,18 @@ import {
 import { defaults, type Command, type Metrics } from '../lib/lab';
 import {
   COMPARE_STRANDS,
+  CRATE_DROP,
   HAND_MAX,
   HAND_START,
   LOAD_CEILING,
   LOAD_FLOOR,
+  LOAD_START,
+  LANYARD_SLACK,
   LinkedRigs,
   MAX_STRANDS,
   PULLEY_MASS,
   PulleySystem,
+  BEAM_Y,
   pathLength,
   rigGeometry,
   ropePath,
@@ -240,7 +244,7 @@ void test('plates track the load and rigs never overlap', () => {
   for (let i = 1; i < rigs.length; i++)
     assert.ok(
       x[i - 1] + rigs[i - 1].geometry.handX + 0.8 <
-        x[i] + rigs[i].geometry.xs[0] - 0.8,
+        x[i] + rigs[i].geometry.lanyardX - 0.35,
     );
 });
 
@@ -278,6 +282,172 @@ void test('side-by-side scene mounts three rigs driven by one pull', async () =>
     );
     latest.pulley.rigs.forEach((r) =>
       close(r.raised, 2 / r.strands, 1e-6, `${r.strands}:1 raised`),
+    );
+  } finally {
+    await renderer.unmount();
+  }
+});
+
+void test('a catching rope hands back a small rebound, then the load settles', () => {
+  const system = new PulleySystem({ mass: 20, gravity: g });
+  // Lift the load 0.5 m above where the rope holds it, then let it drop.
+  system.height += 0.5;
+  system.slack = true;
+  let catches = 0,
+    wasSlack = true,
+    peak = 0;
+  system.advance(4, () => {
+    peak = Math.max(peak, system.tension);
+    if (wasSlack && !system.slack) catches++;
+    wasSlack = system.slack;
+  });
+  assert.ok(catches >= 2, `rebounds: ${catches}`);
+  // The rebound adds to the impulse: more than a dead stop at full impact.
+  const impact = Math.sqrt(2 * g * 0.5);
+  assert.ok(peak > (22 * impact) / (2 / 240), `spike ${peak}`);
+  assert.equal(system.slack, false);
+  close(system.velocity, 0, 1e-9, 'settled');
+});
+
+void test('the rope rating judges shock loads averaged over 50 ms', () => {
+  const drop = (rating: number) => {
+    const system = new PulleySystem({ mass: 20, gravity: g, rating });
+    system.height += 0.5;
+    system.slack = true;
+    let peak = 0,
+      strain = 0;
+    system.advance(2, () => {
+      peak = Math.max(peak, system.tension);
+      strain = Math.max(strain, system.strain);
+    });
+    return { system, peak, strain };
+  };
+  // One step of the catch far exceeds 1000 N, but its 50 ms average does not.
+  const held = drop(1000);
+  assert.ok(held.peak > 1000);
+  assert.equal(held.system.snapped, false);
+  assert.ok(held.strain > 0.5 && held.strain < 1, `strain ${held.strain}`);
+  const broken = drop(400);
+  assert.equal(broken.system.snapped, true);
+  assert.equal(broken.system.tension, 0);
+  // Ordinary pulling and letting out stays well inside a 1500 N rating.
+  const normal = new PulleySystem({ mass: 20, gravity: g, rating: 1500 });
+  normal.pullBy(4);
+  normal.advance(3);
+  normal.pullBy(-3);
+  normal.advance(4);
+  assert.equal(normal.snapped, false);
+});
+
+void test('a snapped rope drops the load onto the lanyard and it swings', () => {
+  const system = new PulleySystem({
+    mass: 80,
+    gravity: g,
+    strands: 1,
+    rating: 2000,
+  });
+  system.pullBy(3);
+  system.advance(3);
+  assert.equal(system.snapped, false);
+  // Derate the rope under its 785 N load, 3 m up.
+  system.rating = 500;
+  system.advance(1 / 240);
+  assert.equal(system.snapped, true);
+  const ax = system.geometry.lanyardX,
+    reach = Math.hypot(0 - ax, system.height - BEAM_Y);
+  close(system.lanyard, reach + LANYARD_SLACK, 1e-9, 'locked length');
+  let crossings = 0,
+    side = Math.sign(system.x - ax),
+    caught = false;
+  system.advance(8, () => {
+    const d = Math.hypot(system.x - ax, system.height - BEAM_Y);
+    assert.ok(d <= system.lanyard + 1e-9, `lanyard stretched to ${d}`);
+    if (system.lanyardTension > 0) caught = true;
+    const now = Math.sign(system.x - ax);
+    if (now && now !== side) {
+      crossings++;
+      side = now;
+    }
+  });
+  assert.ok(caught, 'lanyard never caught the load');
+  assert.ok(crossings >= 2, `swing crossings: ${crossings}`);
+  assert.equal(system.tension, 0);
+  // Drag and the lock only remove energy.
+  const energy = (s: PulleySystem) => s.kinetic + s.totalMass * g * s.height;
+  const before = energy(system);
+  system.advance(4);
+  assert.ok(energy(system) <= before + 1e-6);
+});
+
+void test('force lens draws weight, hand, and one arrow per strand, plus a ghost target', async () => {
+  const settings = {
+    ...defaults('cathedral'),
+    pulleyRig: '4' as const,
+    forceLens: true,
+  };
+  let command: Command = { id: 0, action: 'pull' };
+  const element = () => (
+    <PulleyCathedral
+      settings={settings}
+      command={command}
+      onMetrics={() => {}}
+    />
+  );
+  const renderer = await create(element());
+  try {
+    assert.equal(
+      renderer.scene.findAllByProps({ name: 'force-arrow' }).length,
+      2 + 4,
+    );
+    const ghost = () =>
+      renderer.scene.findByProps({ name: 'pulley-ghost' }).instance;
+    await renderer.advanceFrames(5, 1 / 60);
+    assert.equal(ghost().visible, false);
+    command = { id: 1, action: 'pull' };
+    await renderer.update(element());
+    await renderer.advanceFrames(5, 1 / 60);
+    assert.equal(ghost().visible, true);
+    // 2 m of pull on a 4:1 rig settles the load 0.5 m higher.
+    close(ghost().position.y + CRATE_DROP, LOAD_START + 0.5, 1e-9, 'ghost');
+    await renderer.advanceFrames(240, 1 / 60);
+    assert.equal(ghost().visible, false);
+  } finally {
+    await renderer.unmount();
+  }
+});
+
+void test('the scene reports a snapped rope and keeps the lanyard drawn', async () => {
+  let latest: Metrics | undefined;
+  let settings = {
+    ...defaults('cathedral'),
+    pulleyRig: '1' as const,
+    loadMass: 20,
+  };
+  let command: Command = { id: 0, action: 'pull' };
+  const element = () => (
+    <PulleyCathedral
+      settings={settings}
+      command={command}
+      onMetrics={(m) => {
+        latest = m;
+      }}
+    />
+  );
+  const renderer = await create(element());
+  try {
+    command = { id: 1, action: 'pull' };
+    await renderer.update(element());
+    await renderer.advanceFrames(180, 1 / 60);
+    assert.equal(latest?.pulley?.rigs[0].snapped, false);
+    settings = { ...settings, ropeRating: 150 };
+    await renderer.update(element());
+    await renderer.advanceFrames(60, 1 / 60);
+    assert.ok(latest?.pulley);
+    assert.equal(latest.pulley.rigs[0].snapped, true);
+    assert.equal(latest.pulley.rigs[0].tension, 0);
+    assert.equal(
+      renderer.scene.findAllByProps({ name: 'pulley-lanyard' }).length,
+      1,
     );
   } finally {
     await renderer.unmount();
