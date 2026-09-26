@@ -10,6 +10,8 @@ export type DemoId =
   | 'cathedral';
 export type Vec3 = [number, number, number];
 export type Quality = 'auto' | 'high' | 'low';
+/** Supporting strands of a single rig, or 1:1, 2:1, and 4:1 side by side. */
+export type PulleyRig = '1' | '2' | '4' | 'compare';
 export type Command = {
   id: number;
   action:
@@ -46,6 +48,7 @@ export type LabSettings = {
   magnetCount: number;
   fieldThreads: boolean;
   loadMass: number;
+  pulleyRig: PulleyRig;
 };
 export type Metrics = {
   fps: number;
@@ -54,11 +57,14 @@ export type Metrics = {
   ghosts?: { elapsed: number; separation: number; energyDrift: number };
   loom?: { lines: number; linked: number; particles: number; selected: number };
   pulley?: {
-    tension: number;
-    peak: number;
     pulled: number;
-    raised: number;
-    slack: boolean;
+    rigs: {
+      strands: number;
+      tension: number;
+      peak: number;
+      raised: number;
+      slack: boolean;
+    }[];
   };
 };
 export const demos = [
@@ -187,6 +193,7 @@ export function defaults(id: DemoId): LabSettings {
     magnetCount: 2,
     fieldThreads: true,
     loadMass: 20,
+    pulleyRig: '2',
   };
 }
 export function seeded(index: number) {

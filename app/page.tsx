@@ -69,6 +69,7 @@ export default function Home() {
   const loomDemo = demo === 'loom';
   const cathedralDemo = demo === 'cathedral';
   const pulley = metrics.pulley;
+  const anySlack = pulley?.rigs.some((r) => r.slack) ?? false;
   const magnetName = 'ABCD'[
     Math.min(
       metrics.loom?.selected ?? settings.magnetCount - 1,
@@ -331,9 +332,12 @@ export default function Home() {
               <span className="ghost-spectrum pulley-spectrum" />
               <span>
                 PULLED {(pulley?.pulled ?? 0).toFixed(2)} m · RAISED{' '}
-                {(pulley?.raised ?? 0).toFixed(2)} m
+                {(pulley?.rigs ?? [{ raised: 0 }])
+                  .map((r) => r.raised.toFixed(2))
+                  .join(' / ')}{' '}
+                m
               </span>
-              <span>ROPE {pulley?.slack ? 'SLACK' : 'TAUT'}</span>
+              <span>ROPE {anySlack ? 'SLACK' : 'TAUT'}</span>
             </div>
           )}
           {demo === 'singularity' && (
@@ -459,15 +463,26 @@ export default function Home() {
               />
             )}
             {cathedralDemo && (
-              <Range
-                label="Load mass"
-                value={settings.loadMass}
-                min={5}
-                max={80}
-                step={1}
-                unit="kg"
-                onChange={(v) => update('loadMass', v)}
-              />
+              <>
+                <Choice
+                  label="Rig"
+                  value={settings.pulleyRig}
+                  options={['1', '2', '4', 'compare']}
+                  labels={['1:1', '2:1', '4:1', 'All three']}
+                  onChange={(v) =>
+                    update('pulleyRig', v as LabSettings['pulleyRig'])
+                  }
+                />
+                <Range
+                  label={`Load · ${Math.min(8, Math.max(1, Math.round(settings.loadMass / 10)))} plates`}
+                  value={settings.loadMass}
+                  min={10}
+                  max={80}
+                  step={5}
+                  unit="kg"
+                  onChange={(v) => update('loadMass', v)}
+                />
+              </>
             )}
             {(fieldDemo || demo === 'destruction' || demo === 'chain') && (
               <Range
@@ -657,9 +672,9 @@ export default function Home() {
           )}
           {cathedralDemo && (
             <p className="ghost-note ghost-explainer">
-              Two strands hold the movable pulley, so each carries half the
-              load: pull twice as far, with half the force. Let rope out quickly
-              and it goes slack.
+              With n strands holding the movable block, each carries 1/n of the
+              load: pull n times as far, with 1/n the force. All three hangs
+              every rig from one bar. Let rope out quickly and it goes slack.
             </p>
           )}
           {loomDemo && (
@@ -681,34 +696,29 @@ export default function Home() {
             </div>
             {cathedralDemo && (
               <>
-                <div title="Tension in each strand; the peak includes catch spikes">
-                  <span>Rope tension</span>
-                  <strong>
-                    {pulley ? pulley.tension.toFixed(0) : '—'}
-                    <small>
-                      {' '}
-                      N · peak {pulley ? pulley.peak.toFixed(0) : '—'}
-                    </small>
-                  </strong>
-                </div>
-                <div title="Rope drawn in at the free end, and the load's rise">
+                {(pulley?.rigs ?? []).map((r) => (
+                  <div
+                    key={r.strands}
+                    title={`Tension in each of the ${r.strands} supporting strands; the peak includes catch spikes`}
+                  >
+                    <span>{r.strands} : 1 tension</span>
+                    <strong>
+                      {r.tension.toFixed(0)}
+                      <small> N · peak {r.peak.toFixed(0)}</small>
+                    </strong>
+                  </div>
+                ))}
+                <div title="Rope drawn in at the free end, and each load's rise">
                   <span>Pulled / raised</span>
                   <strong>
                     {(pulley?.pulled ?? 0).toFixed(2)}
-                    <small> m · {(pulley?.raised ?? 0).toFixed(2)} m</small>
-                  </strong>
-                </div>
-                <div>
-                  <span>Advantage</span>
-                  <strong>
-                    2 : 1
                     <small>
                       {' '}
-                      ·{' '}
-                      {((settings.loadMass + 2) * settings.gravity).toFixed(
-                        0,
-                      )}{' '}
-                      N load
+                      m ·{' '}
+                      {(pulley?.rigs ?? [])
+                        .map((r) => r.raised.toFixed(2))
+                        .join(' / ')}{' '}
+                      m
                     </small>
                   </strong>
                 </div>

@@ -214,7 +214,7 @@ const cameraViews: Partial<Record<DemoId, CameraView>> & {
   default: { start: [18, 14, 22], end: [14, 10, 17], target: [0, 2, 0] },
   ghosts: { start: [5, 8, 25], end: [2.5, 6, 20], target: [0, 4.3, 0] },
   loom: { start: [4, 16, 20], end: [2, 11.5, 14], target: [0, 1.2, 0] },
-  cathedral: { start: [7, 2, 22], end: [3.5, 4.5, 15], target: [0.4, 4.6, 0] },
+  cathedral: { start: [6, 2, 24], end: [2.5, 4.8, 17], target: [0, 4.6, 0] },
 };
 function CameraEntrance({
   stopped,
