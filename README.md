@@ -35,7 +35,7 @@ The orbital and magnetic fields are artistic force models. Destruction uses prea
 
 7. **Pendulum Ghosts** — 10–50 independent double pendulums with minute initial-angle differences, luminous trails, a white reference, and release replay.
 8. **Magnetic Field Loom** — draggable bar magnets whose field lines are traced live, with glowing flux particles and polarity flips that reconnect the pattern.
-9. **Pulley Cathedral** — a 2:1 block and tackle under a stone arch: drag the free end and the rope glows with tension as it lifts the load half as far.
+9. **Pulley Cathedral** — 1:1, 2:1, and 4:1 blocks and tackle under a stone arch, alone or pulled side by side from one bar; ropes glow with tension as they lift stacked weights.
 
 ### Pendulum Ghosts
 
@@ -55,11 +55,13 @@ Each bar magnet uses the Gilbert model: two opposite magnetic charges at its tip
 
 ### Pulley Cathedral
 
-Choose experiment **09** (keyboard **9**). A rope runs from a ceiling anchor, under a movable pulley that carries the crate, over a fixed pulley, and down to a glowing handle. Drag the handle up and down its rail, or press **Pull 2 m** (**F**) or **Let out 2 m**. The pull scale beside the handle ticks every metre and the load scale every half metre, so matching ticks line up. The movable wheel turns at half the speed of the fixed one. Load mass (5–80 kg) and gravity change live. The rope's colour follows tension: dim blue when slack, cyan when holding the load at rest, amber when straining, and white-hot for catch spikes.
+Choose experiment **09** (keyboard **9**). The **Rig** control selects a 1:1, 2:1, or 4:1 block and tackle, or **All three** side by side. In a rig, the rope runs from an anchor, alternately under sheaves on the movable block and over fixed sheaves under the beam, then down to a glowing handle. With an even strand count the rope is anchored to the beam; with an odd count it is tied to the block. The movable sheaves share one yoke, and in the 4:1 rig they visibly turn at one and three times the block's speed. In **All three**, a single brass bar holds every free end, so one pull draws the same length of rope from each rig.
 
-The dedicated solver in `lib/pulley.ts` has one coordinate, the height of the movable pulley. The rope is inextensible but one-sided: `2h + y_hand ≥ C`. While taut, the load follows `h = (C − y_hand) / 2`. Each strand then carries `T = (m_load + 2 kg)(g + a) / 2`, measured from the rope's impulse at each fixed 1/240-second step. If the rope is let out faster than the load can fall, it goes slack, tension drops to zero, and the load falls freely until the rope catches it (`catchVelocity`). The crate can also rest on the floor. The hand is a stiff, critically damped follower of the pointer, capped at 5 m/s, so a flick produces a finite tension spike. The wheels have no rotational inertia or friction, and the load moves only vertically, with no swing.
+Drag a handle (or the bar) along its rail, or press **Pull 2 m** (**F**) or **Let out 2 m**. The pull scale beside each handle ticks every metre and the load scale every 1/n metre, so matching ticks line up. The load is one steel plate per 10 kg (10–80 kg) in a cage. Load mass and gravity change live; switching rigs restarts the experiment. The rope's colour shows tension on one absolute scale shared by every rig: dim blue when slack, cyan when a 2:1 rig holds the load at rest, amber when straining, and white-hot for catch spikes. So a 1:1 rope glows hotter than a 4:1 rope carrying the same load.
 
-Tests cover exact 2 m → 1 m travel with constant rope length (both analytic and as drawn), rest and lifting tension, the 2:1 wheel speed ratio, slack and catch, resting on the floor, cadence independence, and the mounted scene's pull, pause, and load-mass handling.
+The dedicated solver in `lib/pulley.ts` has one coordinate per rig, the height of the movable block. The rope is inextensible but one-sided: `n·h + y_hand ≥ C`. While taut, the load follows `h = (C − y_hand) / n`. Each strand then carries `T = M(g + a) / n`, measured from the rope's impulse at each fixed 1/240-second step. `M` is the load plus 2 kg for each sheave on the block, so extra sheaves add a little weight. If the rope is let out faster than the load can fall, it goes slack, tension drops to zero, and the load falls freely until the rope catches it (`catchVelocity`). The load can also rest on the floor. The hand is a stiff, critically damped follower of the pointer, capped at 5 m/s, so a flick produces a finite tension spike. Each hand stops before its block reaches the fixed sheaves; the linked bar stops at the most limited rig's limit. The sheaves have no rotational inertia or friction, and the loads move only vertically, with no swing.
+
+Tests cover exact n:1 travel with constant rope length (analytic and as drawn) for 1–6 strands, rest and lifting tension, sheave layout and speed ratios, the linked bar's equal pull and 1 : ½ : ¼ tensions, slack and catch, resting on the floor, cadence independence, plate counts, non-overlapping rigs, and the mounted scene in both single and side-by-side layouts.
 
 ## Controls
 
@@ -82,7 +84,7 @@ Body spawning is available in the six Rapier experiments and is capped at 48 per
 - `components/lab/{chain,orbit,destruction,swarm,singularity,ghosts,loom,cathedral}.tsx` — individual experiments.
 - `lib/pendulum.ts` and `lib/ghost-trails.ts` — deterministic double-pendulum solver and bounded trajectory storage.
 - `lib/magnetism.ts` — Gilbert-model bar magnets, RK4 field-line tracer, and flux particles.
-- `lib/pulley.ts` — one-sided rope constraint solver and rope path for the 2:1 pulley.
+- `lib/pulley.ts` — one-sided rope constraint solver, n-strand rig layout, rope path, and linked rigs.
 - `lib/fields.ts` — orbital and formation force calculations.
 - `tests/` — real Rapier scene mounting, stepping, reset, damage, propagation, eruption, and field tests.
 
