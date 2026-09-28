@@ -102,3 +102,7 @@ The optional feature-detected WebMCP interface exposes selection, pause, reset, 
 ## Hosting
 
 The Sites project is registered in `.openai/hosting.json`. `npm run build` emits the Cloudflare-compatible Worker and public assets under `dist/`. Local development does not require Sites credentials. Never put source-repository tokens in this repo.
+
+## License
+
+[MIT](LICENSE) © 2026 Ahmad Luqman
